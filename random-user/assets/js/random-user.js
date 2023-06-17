@@ -1,8 +1,28 @@
 jQuery(document).ready(function($) {
-  function fetch()
-  {
+function fetch()
+{
+
+  var gender = "";
+  if (document.getElementById('male').checked && document.getElementById('female').checked) {
+    gender = '';
+  }
+  else if (document.getElementById('male').checked) {
+    gender = 'male';
+  } else if (document.getElementById('female').checked) {
+    gender = 'female';
+  }
+  
+
+var country = $('#country').val();
+if (country === 'Random') {
+  country = "";
+}
+
+var url = 'https://randomuser.me/api/?gender=' + gender + "&nat=" + country;
+
+  console.log(url);
     $.ajax({
-        url: 'https://randomuser.me/api/',
+        url: url,
         dataType: 'json',
         success:async function(data) {
           var gender = await data.results[0].gender;
@@ -43,12 +63,10 @@ jQuery(document).ready(function($) {
       });
     }
     fetch();
-    // $('#btn-modal').click();
 
     $('#again').click(function(){
       fetch();
 
-    $('#btn-modal').draggable();
     });
 
 });

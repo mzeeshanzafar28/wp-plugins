@@ -10,13 +10,15 @@ License: GPLv2 or later
 
 // Add admin menu option
 add_action('admin_menu', 'custom_function1');
-function custom_function1() {
-    add_menu_page('Random User', 'Random User', 'manage_options', 'random-user', 'custom_function2',plugins_url('assets/images/random-user.png',__FILE__));
+function custom_function1()
+{
+  add_menu_page('Random User', 'Random User', 'manage_options', 'random-user', 'custom_function2', plugins_url('assets/images/random-user.png', __FILE__));
 }
 
 // Render options page
-function custom_function2() {
-    echo '<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+function custom_function2()
+{
+  echo '<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
@@ -76,22 +78,23 @@ function custom_function2() {
 }
 
 add_action('wp_enqueue_scripts', 'enqueue_script');
-add_action( 'admin_enqueue_scripts', 'enqueue_style' );
+add_action('admin_enqueue_scripts', 'enqueue_style');
 
-function enqueue_script() {
-    wp_enqueue_script('custom-script', plugin_dir_url(__FILE__) . 'assets/js/random-user.js', array('jquery'), '1.0.0', true);
+function enqueue_script()
+{
+  wp_enqueue_script('custom-script', plugin_dir_url(__FILE__) . 'assets/js/random-user.js', array('jquery'), '1.0.0', true);
 }
 
 function enqueue_style()
 {
-wp_enqueue_style( 'custom-style', plugin_dir_url(__FILE__) . 'assets/css/style.css' );
+  wp_enqueue_style('custom-style', plugin_dir_url(__FILE__) . 'assets/css/style.css');
 }
 
-add_action('wp_body_open','add_modal');
+add_action('wp_body_open', 'add_modal');
 
 function add_modal()
 {
-    echo '
+  echo '
     <div class="modal fade" id="myModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -122,6 +125,41 @@ function add_modal()
                         </div>
                     </div>
                             <a id="again" class="btn btn-primary">New Data</a>
+                            &nbsp;
+                            Male <input type="checkbox" id="male">
+                            &nbsp;
+                            Female <input type="checkbox" id="female">
+                            &nbsp;
+                            <label for="country">Country</label>
+                            <select id="country" name="country">
+                            <option value="Random">Random</option>
+                              <option value="UK">UK</option>
+                              <option value="US">US</option>
+                              <option value="AS">AS</option>
+                              <option value="NZ">NZ</option>
+                              <option value="AU">AU</option>
+                              <option value="BR">BR</option>
+                              <option value="CA">CA</option>
+                              <option value="CH">CH</option>
+                              <option value="DE">DE</option>
+                              <option value="DK">DK</option>
+                              <option value="ES">ES</option>
+                              <option value="FI">FI</option>
+                              <option value="FR">FR</option>
+                              <option value="GB">GB</option>
+                              <option value="IE">IE</option>
+                              <option value="IN">IN</option>
+                              <option value="IR">IR</option>
+                              <option value="MX">MX</option>
+                              <option value="NL">NL</option>
+                              <option value="NO">NO</option>
+                              <option value="NZ">NZ</option>
+                              <option value="RS">RS</option>
+                              <option value="TR">TR</option>
+                              <option value="UA">UA</option>
+
+                            </select>
+
                         </div>
                     </div>
                 </div>
@@ -130,7 +168,7 @@ function add_modal()
     </div>
     ';
 
-    echo '<style>
+  echo '<style>
     .round-button {
       display: inline-block;
       border-radius: 50%;
@@ -147,9 +185,9 @@ function add_modal()
     }
     </style>';
 
-    echo '
+  echo '
     <div id="btn-modal" type="button" class="round-button" data-bs-toggle="modal" data-bs-target="#myModal">Get Data</div>
     ';
 }
-    wp_enqueue_style('bootstrap-css', 'https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css');
-    wp_enqueue_script('bootstrap-js', 'https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js', array('jquery'), '5.0.2', true);
+wp_enqueue_style('bootstrap-css', 'https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css');
+wp_enqueue_script('bootstrap-js', 'https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js', array('jquery'), '5.0.2', true);
