@@ -8,6 +8,10 @@ Version: 1.0.0
 License: GPLv2 or later
 */
 
+if (!defined('ABSPATH')) {
+    die("Something went wrong");
+}
+
 // Add admin menu option
 add_action('admin_menu', 'custom_function1');
 function custom_function1()
