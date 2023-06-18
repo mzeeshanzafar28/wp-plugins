@@ -8,6 +8,10 @@ License: GPLv2 or later
 Author URI: http://axontech.com
 */
 
+if (!defined('ABSPATH')) {
+    die("Something went wrong");
+}
+
 function custom_fee_enqueue_script() {
     if (is_checkout()) {
         wp_enqueue_script('custom-fee-script', plugin_dir_url(__FILE__) . 'js/custom-fee-script.js', array('jquery'), '1.0', true);
