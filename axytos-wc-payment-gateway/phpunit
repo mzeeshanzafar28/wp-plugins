@@ -1,0 +1,2 @@
+#!/bin/bash
+./unit_tests/vendor/bin/phpunit "$@"

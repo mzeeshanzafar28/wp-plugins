@@ -1,0 +1,119 @@
+#search-results{
+    width: 100%;
+    box-shadow: 1px 2px 30px 1px rgba(0, 0, 0, 0.2);
+    border-radius:10px;
+    text-align: center;
+    justify-content: center;
+	max-height:80vh;
+	overflow-y:auto;
+    }
+
+.search-res{
+    /* padding: 5px; */
+    /* border-radius:10px; */
+    /* box-shadow: 1px 2px 30px 1px rgba(0, 0, 0, 0.2); */
+    /* margin-bottom: 5px; */
+    /* margin-top: 0px; */
+    text-align: center;
+}
+
+.search-res li {
+    text-align: left !important;
+    }
+
+.res-ancher h2{
+    margin-left: 1vw;
+}
+
+#search-bar {
+    margin-top:40px;
+    width: 100%;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid black;
+/*     margin-bottom: 5px;
+	color:white;
+	background-color:black; */
+}
+
+.res-ancher{
+    display: flex;
+    justify-items: self-start;
+    justify-content: start;
+    margin-bottom: -18px;
+    }
+
+.res-ancher img{
+    border-radius: 50%;
+    height: 10vh;
+    width: auto;
+}
+
+.search-res h5, .search-res p{
+    padding:0;
+    margin:0;
+}
+
+.name-n-price{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: start;
+    margin-left: 1vw;
+}
+
+
+.assistant-custom-table:last-child tr, .assistant-custom-table:last-child th, .assistant-custom-table:last-child td{
+    border: 1px solid #dcdcdc;
+    text-align: center;
+    justify-content: center;
+    align-items: center;
+    /* padding: 0; */
+    /* margin: 0; */
+}
+.assistant-custom-table {
+    width: 100vw !important;
+    max-width: 100% !important;
+}
+
+.assistant-custom-table:last-child tbody tr:nth-child(odd) {background-color: #e7dada96;}
+.h2-for-title{
+    padding: 0 !important;
+    margin: 0 !important;
+}
+/* 
+.fix-search {
+	position: fixed !important;
+	max-width: 57vw;
+    top: 0 !important;
+	margin-top:5vh !important;
+    background-color: aliceblue !important;
+    z-index: 99999 !important;
+}
+
+.fix-results {
+	position: fixed !important;
+	max-width: 57vw;
+    top: 0 !important;
+	margin-top:10vh !important;
+    background-color: aliceblue !important;
+    z-index: 99999 !important;
+}
+
+.scroller{
+	height: 100% !important;
+	overflow-y: auto !important;
+} */
+
+#boxed-wrapper {
+overflow: visible !important;
+}
+
+/* .search-bar-container:has(div.fusion-text-2){ */
+.fusion-text-2{
+position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+  z-index:999;
+	margin-top:10px;
+}

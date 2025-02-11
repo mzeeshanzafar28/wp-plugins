@@ -1,0 +1,21 @@
+.rule-wrapper input {
+    width: 10% !important;
+    margin: 5px 0px !important;
+}
+
+#rule-initiator {
+    background: lightgray;
+    margin: 5px 5px;
+}
+
+.rule-destroyer {
+    margin: 7px 0px;
+}
+
+.kesher-label {
+    text-decoration: underline;
+}
+
+.kesher-color-field {
+    max-width: 360px !important;
+}

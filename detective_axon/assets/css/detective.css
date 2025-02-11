@@ -1,0 +1,48 @@
+#adminmenu .wp-menu-image img {
+    padding: 9px 0 0;
+    opacity: .6;
+    width: 21px;
+    margin-top: -4px;
+}
+
+.center{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.detective-container{
+    height: 93vh;
+    width:87vw;
+    /* background-image: url("https://images.unsplash.com/photo-1504890001746-a9a68eda46e2?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1087&q=80"); */
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: cover;
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.invite-links-section,
+.user-tracking-section {
+    flex: 1;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.tracking-data-table {
+    max-height: 500px; 
+    max-width: 300px;
+    overflow-y: scroll;
+}
+
+.site-visits-section{
+    flex: 1;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.custom-link-section{
+    flex: 0.5;
+    padding: 10px;
+    box-sizing: border-box;
+}

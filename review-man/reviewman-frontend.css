@@ -1,0 +1,13 @@
+.woocommerce-review__verified.verified {
+    display: inline-block;
+    position: relative;
+}
+
+.woocommerce-review__verified .verified-tick {
+    width: 16px; /* Adjust the size of the tick */
+    height: 16px; /* Adjust the size of the tick */
+}
+
+.verified-tick {
+    cursor: pointer;
+}

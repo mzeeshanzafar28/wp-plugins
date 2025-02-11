@@ -1,0 +1,7 @@
+.reviewman-background {
+    background-image: url('https://www.shutterstock.com/image-vector/handdrawn-cartoon-angry-duck-face-600nw-2371372753.jpg');
+    background-size: cover;
+    padding: 20px;
+    border-radius: 10px;
+    height:100vh !important;
+}
