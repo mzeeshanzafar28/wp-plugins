@@ -1,0 +1,187 @@
+/* Shipping Protection Classic */
+.shipping-protection-row {
+    background: #f5f5f5;
+    border-radius: 5px;
+    padding: 10px;
+    border: 5px solid black;
+}
+
+.shipping-protection-label {
+    display: block;
+}
+
+.image-and-title-wrapper {
+    margin-top: -5%;
+}
+
+.protection-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+
+.protection-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 5px;
+    vertical-align: middle;
+}
+
+.protection-title {
+    font-weight: bold;
+    font-size: 22px;
+    display: inline;
+    margin-left: 2%;
+}
+
+.protection-subtitle {
+    font-size: 0.9em;
+    color: #666;
+    display: block;
+    margin-bottom: 12px;
+    width: 60%;
+    margin-top: -5%;
+    margin-left: 8%;
+}
+
+.protection-carbon {
+    font-size: 0.9em;
+    color: black;
+    display: block;
+    margin-left: 7%;
+}
+
+.carbon-icon {
+    width: 25px;
+    height: 25px;
+    margin-right: 5px;
+    vertical-align: middle;
+}
+
+.route-logo {
+    width: 40px;
+    height: 16px;
+    margin-left: 5px;
+    vertical-align: middle;
+    margin-top: -1%;
+}
+
+.route-title {
+    margin-left: 1%;
+}
+
+.shipping-protection-toggle-wrapper {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    /* gap: 10px; */
+}
+
+.shipping-protection-toggle {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 24px;
+}
+
+.shipping-protection-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.4s;
+    border-radius: 24px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    transition: 0.4s;
+    border-radius: 50%;
+}
+
+input:checked+.toggle-slider {
+    background-color: black;
+}
+
+input:checked+.toggle-slider:before {
+    transform: translateX(16px);
+}
+
+.protection-fee {
+    font-weight: bold;
+    font-size: 14px;
+    color: #000;
+    margin-top: -10px;
+}
+
+/* Popup Styles */
+.popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.popup-content {
+    background: white;
+    padding: 20px;
+    border-radius: 5px;
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+}
+
+.popup-content h3 {
+    margin-top: 0;
+}
+
+.popup-content button {
+    margin: 10px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.popup-content button#accept-decline,
+.popup-content button#accept-decline-block {
+    background-color: #dc3545;
+    color: white;
+}
+
+.popup-content button#cancel-decline,
+.popup-content button#cancel-decline-block {
+    background-color: #28a745;
+    color: white;
+}
+
+/* Shipping Protection Block */
+.shipping-protection-container {
+    margin: 20px 0;
+    padding: 10px;
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
