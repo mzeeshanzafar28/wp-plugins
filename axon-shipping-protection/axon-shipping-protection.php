@@ -2,7 +2,7 @@
 /*
 * Plugin Name: Axon Shipping Protection
 * Author: Axon Technologies
-* Version: 1.0
+* Version: 1.4
 * Author URI: https://axontech.pk
 * Description: Adds shipping protection fee to WooCommerce checkout with toggle option
 */
@@ -20,11 +20,12 @@ class Axon_Shipping_Protection {
         // add_action( 'enqueue_block_assets', array( $this, 'axon_enqueue_block_assets' ) );
         add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
         add_action( 'admin_init', array( $this, 'register_settings' ) );
+        add_filter( 'woocommerce_checkout_fields', array( $this, 'our_hidden_field' ) );
         add_action( 'woocommerce_cart_calculate_fees', array( $this, 'add_shipping_protection_fee' ) );
         add_action( 'woocommerce_review_order_before_order_total', array( $this, 'add_shipping_protection_field' ) );
         add_action( 'wp_footer', array( $this, 'add_popup_html' ) );
-        add_action( 'wp_ajax_update_shipping_protection', array( $this, 'ajax_update_shipping_protection' ) );
-        add_action( 'wp_ajax_nopriv_update_shipping_protection', array( $this, 'ajax_update_shipping_protection' ) );
+        // add_action( 'wp_ajax_update_shipping_protection', array( $this, 'ajax_update_shipping_protection' ) );
+        // add_action( 'wp_ajax_nopriv_update_shipping_protection', array( $this, 'ajax_update_shipping_protection' ) );
     }
 
     public function enqueue_scripts() {
@@ -37,6 +38,17 @@ class Axon_Shipping_Protection {
                 'nonce' => wp_create_nonce( 'shipping_protection_nonce' )
             ) );
         }
+    }
+
+    public function our_hidden_field( $fields ) {
+        $fields[ 'billing' ][ 'shipping_protection_hidden' ] = array(
+            'type'     => 'hidden',
+            'id'       => 'shipping_protection_hidden',
+            'class'    => array( 'form-row-wide' ),
+            'priority' => 51,
+        );
+
+        return $fields;
     }
 
     // function axon_enqueue_block_assets() {
@@ -119,6 +131,16 @@ class Axon_Shipping_Protection {
 
         $protection_active = WC()->session->get( 'shipping_protection_active', true );
 
+        if ( isset( $_POST[ 'post_data' ] ) ) {
+            parse_str( $_POST[ 'post_data' ], $post_data_array );
+
+            $shipping_protection = isset( $post_data_array[ 'shipping_protection_hidden' ] ) ? $post_data_array[ 'shipping_protection_hidden' ] : null;
+
+            $protection_active = ( $shipping_protection === 'on' ) ? true : false;
+
+            WC()->session->set( 'shipping_protection_active', $protection_active );
+        }
+
         if ( $enforced || $protection_active ) {
             $fee = ( $cart->cart_contents_total * $percentage ) / 100;
             $cart->add_fee( 'Shipping Protection', $fee, true );
@@ -176,19 +198,19 @@ class Axon_Shipping_Protection {
         }
     }
 
-    public function ajax_update_shipping_protection() {
-        check_ajax_referer( 'shipping_protection_nonce', 'nonce' );
+    //     public function ajax_update_shipping_protection() {
+    //         check_ajax_referer( 'shipping_protection_nonce', 'nonce' );
 
-        $protection_active = isset( $_POST[ 'protection_active' ] ) && $_POST[ 'protection_active' ] === 'true' ? true : false;
-        WC()->session->set( 'shipping_protection_active', $protection_active );
+    //         $protection_active = isset( $_POST[ 'protection_active' ] ) && $_POST[ 'protection_active' ] === 'true' ? true : false;
+    //         WC()->session->set( 'shipping_protection_active', $protection_active );
 
-        WC()->cart->calculate_totals();
+    //         WC()->cart->calculate_totals();
 
-        wp_send_json_success( array(
-            'fragments' => apply_filters( 'woocommerce_update_order_review_fragments', array() ),
-            'cart_hash' => WC()->cart->get_cart_hash()
-        ) );
-    }
+    //         wp_send_json_success( array(
+    //             'fragments' => apply_filters( 'woocommerce_update_order_review_fragments', array() ),
+    //             'cart_hash' => WC()->cart->get_cart_hash()
+    // ) );
+    //     }
 }
 
 new Axon_Shipping_Protection();

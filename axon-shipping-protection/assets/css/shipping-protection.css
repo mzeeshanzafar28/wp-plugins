@@ -30,13 +30,13 @@
 
 .protection-title {
     font-weight: bold;
-    font-size: 22px;
+    font-size: 18px;
     display: inline;
     margin-left: 2%;
 }
 
 .protection-subtitle {
-    font-size: 0.9em;
+    font-size: 0.7em;
     color: #666;
     display: block;
     margin-bottom: 12px;
@@ -46,21 +46,22 @@
 }
 
 .protection-carbon {
-    font-size: 0.9em;
+    font-size: 0.7em;
     color: black;
     display: block;
     margin-left: 7%;
+    margin-bottom: 10px;
 }
 
 .carbon-icon {
-    width: 25px;
-    height: 25px;
+    width: 20px;
+    height: 20px;
     margin-right: 5px;
     vertical-align: middle;
 }
 
 .route-logo {
-    width: 40px;
+    width: 16px;
     height: 16px;
     margin-left: 5px;
     vertical-align: middle;
@@ -127,7 +128,7 @@ input:checked+.toggle-slider:before {
     font-weight: bold;
     font-size: 14px;
     color: #000;
-    margin-top: -10px;
+    /* margin-top: -10px; */
 }
 
 /* Popup Styles */
