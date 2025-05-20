@@ -3,7 +3,7 @@ jQuery(document).ready(function ($) {
     const modal = $('#gallery-modal');
     const closeModal = $('#close-modal');
     const body = $('body');
-    var selectedImages = [];
+    let selectedImages = [];
     let currentGallery = null;
     let max_images = -1;
     const editorModal = $('#editor-modal');
@@ -16,6 +16,22 @@ jQuery(document).ready(function ($) {
     let isUsingCustomRatios = false;
     let hasFrameImage = false;
     let frameTemplate = null;
+    let isMultipleImageProduct = false;
+    let updatedCropCoordinates = null;
+    const productImage = $('.woocommerce-product-gallery__image img');
+    const galleryOption = $('#gallery-option').val() || 'single_image';
+    let hiddenImagesInput = null;
+    let updateProductImageTimeout = null; // For debouncing
+
+    function checkCustomRatios() {
+        frameTemplate = myAjax.frame_template || {};
+        const coordinates = frameTemplate.coordinates || (galleryOption === 'single_image' ? { x1: 0, y1: 0, x2: 0, y2: 0, aspect_ratio: 0 } : []);
+        hasFrameImage = frameTemplate.frame_image_url && frameTemplate.frame_image_url.trim() !== '';
+        isMultipleImageProduct = Array.isArray(coordinates) && coordinates.length > 1;
+        isUsingCustomRatios = hasFrameImage && (isMultipleImageProduct ? coordinates.some(coord => coord && coord.x1 != null && coord.aspect_ratio > 0) : (coordinates.x1 != null && coordinates.aspect_ratio > 0));
+        console.log('Is multiple image product:', isMultipleImageProduct);
+        console.log('Is using custom ratios:', isUsingCustomRatios);
+    }
 
     function getImagePixelData(imageSrc, callback) {
         const img = new Image();
@@ -78,7 +94,6 @@ jQuery(document).ready(function ($) {
 
             const croppedImageDataUrl = canvas.toDataURL('image/png');
             console.log('Cropped image data URL generated');
-
             callback(null, croppedImageDataUrl);
         };
         img.onerror = function () {
@@ -88,57 +103,227 @@ jQuery(document).ready(function ($) {
         img.src = imageUrl;
     }
 
-    function showPreviewModal(compositeImageUrl) {
-        if (!$('#preview-modal').length) {
-            const previewModalHtml = `
-                <div id="preview-modal">
-                    <div id="preview-modal-content">
-                        <span id="preview-modal-close">×</span>
-                        <h2>Image Preview</h2>
-                        <img id="preview-image" src="" alt="Composited Image" />
-                    </div>
-                </div>
-            `;
-            $('body').append(previewModalHtml);
+    function updateProductImage(newImageUrl = null) {
+        // Debounce the function to prevent multiple calls in quick succession
+        if (updateProductImageTimeout) {
+            clearTimeout(updateProductImageTimeout);
         }
 
-        $('#preview-image').attr('src', compositeImageUrl);
-        $('#preview-modal').show();
-        body.css('overflow', 'hidden');
+        updateProductImageTimeout = setTimeout(() => {
+            checkCustomRatios();
 
-        $('#preview-modal-close').off('click').on('click', function () {
-            $('#preview-modal').hide();
-            body.css('overflow', '');
-            const previewButton = $(`.preview-image-btn[data-index="${currentImageIndex}"]`);
-            previewButton.prop('disabled', false).css('opacity', '1');
-            console.log(`Preview button for image index ${currentImageIndex} re-enabled`);
-        });
-
-        $('#preview-modal').off('click').on('click', function (e) {
-            if ($(e.target).is('#preview-modal')) {
-                $('#preview-modal').hide();
-                body.css('overflow', '');
-                const previewButton = $(`.preview-image-btn[data-index="${currentImageIndex}"]`);
-                previewButton.prop('disabled', false).css('opacity', '1');
-                console.log(`Preview button for image index ${currentImageIndex} re-enabled`);
+            if (!hasFrameImage || !frameTemplate.coordinates) {
+                console.warn('Skipping updateProductImage: Missing frame data');
+                return;
             }
-        });
+
+            const galleryImages = $('.gallery-images input[type="checkbox"]').map(function () {
+                return $(this).siblings('img').attr('src');
+            }).get();
+
+            const selectedImages = $('.selected-image-thumb').map(function () {
+                return $(this).attr('src');
+            }).get();
+
+            const coordinates = isMultipleImageProduct ? frameTemplate.coordinates : [frameTemplate.coordinates];
+            const requiredImages = coordinates.length;
+
+            const promises = [];
+            let imagesToProcess = [];
+
+            if (isMultipleImageProduct) {
+                // For multiple image products:
+                // - If there are selected images, use them (up to requiredImages)
+                // - Otherwise, on page load, use the first x gallery images
+                if (selectedImages.length > 0) {
+                    imagesToProcess = selectedImages.slice(0, requiredImages);
+                } else {
+                    imagesToProcess = galleryImages.slice(0, requiredImages);
+                }
+
+                imagesToProcess.forEach((imageUrl, index) => {
+                    const coord = coordinates[index] || {};
+                    const aspectRatio = coord.aspect_ratio || 1;
+                    promises.push(new Promise((resolve, reject) => {
+                        cropImageFromCenter(imageUrl, aspectRatio, (cropError, croppedDataUrl) => {
+                            if (cropError) reject(cropError);
+                            else {
+                                $.ajax({
+                                    url: myAjax.ajaxurl,
+                                    type: 'POST',
+                                    data: {
+                                        action: 'save_edited_image',
+                                        image_data: croppedDataUrl,
+                                        nonce: myAjax.nonce
+                                    },
+                                    success: (response) => response.success ? resolve(response.data.file_url) : reject('Failed to save cropped image'),
+                                    error: () => reject('AJAX error')
+                                });
+                            }
+                        });
+                    }));
+                });
+            } else {
+                // For single image products:
+                // - If newImageUrl is provided (from selection or edit), use it
+                // - Otherwise, on page load, use the first gallery image
+                const imageUrlToUse = newImageUrl || (selectedImages.length > 0 ? selectedImages[selectedImages.length - 1] : (galleryImages.length > 0 ? galleryImages[0] : null));
+                if (imageUrlToUse) {
+                    const coord = coordinates[0] || {};
+                    const aspectRatio = coord.aspect_ratio || 1;
+                    promises.push(new Promise((resolve, reject) => {
+                        cropImageFromCenter(imageUrlToUse, aspectRatio, (cropError, croppedDataUrl) => {
+                            if (cropError) reject(cropError);
+                            else {
+                                $.ajax({
+                                    url: myAjax.ajaxurl,
+                                    type: 'POST',
+                                    data: {
+                                        action: 'save_edited_image',
+                                        image_data: croppedDataUrl,
+                                        nonce: myAjax.nonce
+                                    },
+                                    success: (response) => response.success ? resolve(response.data.file_url) : reject('Failed to save cropped image'),
+                                    error: () => reject('AJAX error')
+                                });
+                            }
+                        });
+                    }));
+                }
+            }
+
+            if (promises.length === 0) {
+                const unscaledCoordinates = coordinates.map(coord => ({
+                    x1: coord.x1 || 0,
+                    y1: coord.y1 || 0,
+                    x2: coord.x2 || 0,
+                    y2: coord.y2 || 0,
+                    aspect_ratio: coord.aspect_ratio || 1,
+                    frame_original_width: frameTemplate.frame_width || 1200,
+                    frame_original_height: frameTemplate.frame_height || 800
+                }));
+
+                $.ajax({
+                    url: myAjax.ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: {
+                        action: 'composite_images',
+                        nonce: myAjax.nonce,
+                        edited_image_urls: Array(requiredImages).fill(''),
+                        coordinates: unscaledCoordinates,
+                        frame_image_url: frameTemplate.frame_image_url
+                    },
+                    success: function (response) {
+                        if (response.success && response.composite_url) {
+                            const compositeUrl = response.composite_url;
+                            console.log('Composite URL received (no images): ' + compositeUrl);
+                            updateThumbnail(compositeUrl);
+                        } else {
+                            console.error('Failed to get composite URL or invalid response structure:', response);
+                        }
+                    },
+                    error: function (xhr, status, error) {
+                        console.error('AJAX error details:', { status, error, responseText: xhr.responseText });
+                    }
+                });
+                return;
+            }
+
+            $.when.apply($, promises).then(function () {
+                const croppedImageUrls = Array.prototype.slice.call(arguments);
+                while (croppedImageUrls.length < requiredImages) {
+                    croppedImageUrls.push('');
+                }
+
+                const unscaledCoordinates = coordinates.map(coord => ({
+                    x1: coord.x1 || 0,
+                    y1: coord.y1 || 0,
+                    x2: coord.x2 || 0,
+                    y2: coord.y2 || 0,
+                    aspect_ratio: coord.aspect_ratio || 1,
+                    frame_original_width: frameTemplate.frame_width || 1200,
+                    frame_original_height: frameTemplate.frame_height || 800
+                }));
+
+                $.ajax({
+                    url: myAjax.ajaxurl,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: {
+                        action: 'composite_images',
+                        nonce: myAjax.nonce,
+                        edited_image_urls: croppedImageUrls,
+                        coordinates: unscaledCoordinates,
+                        frame_image_url: frameTemplate.frame_image_url
+                    },
+                    success: function (response) {
+                        if (response.success && response.composite_url) {
+                            const compositeUrl = response.composite_url;
+                            console.log('Composite URL received: ' + compositeUrl);
+                            updateThumbnail(compositeUrl);
+                        } else {
+                            console.error('Failed to get composite URL or invalid response structure:', response);
+                        }
+                    },
+                    error: function (xhr, status, error) {
+                        console.error('AJAX error details:', { status, error, responseText: xhr.responseText });
+                    }
+                });
+            }).fail(function (error) {
+                console.error('Error in image processing:', error);
+            });
+        }, 100); // Debounce delay of 100ms
     }
 
-    function checkCustomRatios() {
-        frameTemplate = myAjax.frame_template || {};
-        const coordinates = frameTemplate.coordinates || {
-            x1: 0,
-            y1: 0,
-            x2: 0,
-            y2: 0,
-            aspect_ratio: 0
+    function updateThumbnail(compositeUrl) {
+        productImage.attr({
+            src: compositeUrl,
+            srcset: compositeUrl,
+            'data-src': compositeUrl,
+            'data-large_image': compositeUrl,
+            'data-large_image_width': productImage.data('large_image_width') || 510,
+            'data-large_image_height': productImage.data('large_image_height') || 595
+        });
+        const tempImg = new Image();
+        tempImg.src = compositeUrl;
+        tempImg.onload = function () {
+            if (typeof wc_single_product_params !== 'undefined') {
+                $(document).trigger('wc_update_product_image', [tempImg, productImage.parent().find('a')]);
+            } else {
+                productImage.css('opacity', 0).attr('src', compositeUrl).css('opacity', 1);
+            }
         };
-        hasFrameImage = frameTemplate.frame_image_url && frameTemplate.frame_image_url.trim() !== '';
-        const hasValidAspectRatio = parseFloat(coordinates.aspect_ratio) > 0;
-        const hasValidCoordinates = coordinates.x1 !== 0 || coordinates.y1 !== 0 || coordinates.x2 !== 0 || coordinates.y2 !== 0;
-        isUsingCustomRatios = hasFrameImage && hasValidCoordinates && hasValidAspectRatio;
-        console.log('Custom ratios ' + (isUsingCustomRatios ? 'are' : 'are not') + ' used');
+        console.log('Thumbnail updated with composite: ' + compositeUrl);
+    }
+
+    function saveUpdatedCoordinates(updatedCoords) {
+        const productId = $('.image-selection-container').data('product');
+        $.ajax({
+            url: myAjax.ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'update_frame_template_coordinates',
+                nonce: myAjax.nonce,
+                product_id: productId,
+                coordinates: updatedCoords
+            },
+            success: function (response) {
+                if (response.success) {
+                    console.log('Frame template coordinates updated successfully:', response.data);
+                    frameTemplate.coordinates = updatedCoords;
+                } else {
+                    console.error('Failed to update frame template coordinates:', response.data);
+                }
+            },
+            error: function (xhr, status, error) {
+                console.error('AJAX error while saving frame template coordinates:', {
+                    status: status,
+                    error: error,
+                    responseText: xhr.responseText
+                });
+            }
+        });
     }
 
     galleryButton.on('click', function () {
@@ -173,8 +358,7 @@ jQuery(document).ready(function ($) {
         imageThumbs.each(function (index) {
             const $thumb = $(this);
             const $parent = $thumb.closest('.selected-image');
-
-            $parent.find('.edit-image-btn, .preview-image-btn').remove();
+            $parent.find('.edit-image-btn').remove();
 
             const editButton = $('<button>')
                 .addClass('edit-image-btn')
@@ -192,151 +376,17 @@ jQuery(document).ready(function ($) {
                 })
                 .attr('data-index', index);
             $parent.append(editButton);
-
-            if (isUsingCustomRatios) {
-                const previewButton = $('<button>')
-                    .addClass('preview-image-btn')
-                    .text('Preview')
-                    .css({
-                        backgroundColor: '#007BFF',
-                        color: '#fff',
-                        border: 'none',
-                        padding: '5px 10px',
-                        cursor: 'pointer',
-                        marginTop: '5px',
-                        display: 'block',
-                        marginLeft: 'auto',
-                        marginRight: 'auto'
-                    })
-                    .attr('data-index', index);
-                $parent.append(previewButton);
-            }
         });
-    });
 
-    $(document).on('click', '.preview-image-btn', function () {
-        currentImageIndex = parseInt($(this).attr('data-index'), 10);
-        console.log('Previewing image at index:', currentImageIndex);
-
-        const previewButton = $(this);
-        previewButton.prop('disabled', true).css('opacity', '0.5');
-        console.log(`Preview button for image index ${currentImageIndex} disabled`);
-
-        const currentImageThumb = imageThumbs.eq(currentImageIndex);
-        const imageUrl = currentImageThumb.attr('src');
-
-        if (isUsingCustomRatios) {
-            const frameImageUrl = frameTemplate.frame_image_url;
-            let coordinates = frameTemplate.coordinates;
-
-            if (frameImageUrl && coordinates.x1 !== 0 && coordinates.y1 !== 0 && coordinates.x2 !== 0 && coordinates.y2 !== 0) {
-                console.log('Coordinates (pre-scaled to 1200px):', coordinates);
-
-                cropImageFromCenter(imageUrl, coordinates.aspect_ratio, function (cropError, croppedImageDataUrl) {
-                    if (cropError) {
-                        console.error('Failed to crop image:', cropError);
-                        alert('Failed to crop image for preview.');
-                        showPreviewModal(imageUrl);
-                        return;
-                    }
-
-                    $.ajax({
-                        url: myAjax.ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'save_edited_image',
-                            image_data: croppedImageDataUrl,
-                            nonce: myAjax.nonce
-                        },
-                        success: function (response) {
-                            console.log('AJAX response for saving cropped image:', response);
-                            if (response.success) {
-                                const croppedImageUrl = response.data.file_url;
-                                console.log('Cropped image URL:', croppedImageUrl);
-
-                                const frameImg = new Image();
-                                frameImg.crossOrigin = 'Anonymous';
-                                frameImg.onload = function () {
-                                    const frameWidth = frameImg.width;
-                                    const frameHeight = frameImg.height;
-                                    console.log('Frame image dimensions:', { width: frameWidth, height: frameHeight });
-
-                                    const previewWidth = 1200;
-                                    const unscaleFactor = frameWidth / previewWidth;
-                                    const unscaledCoordinates = {
-                                        x1: coordinates.x1 * unscaleFactor,
-                                        y1: coordinates.y1 * unscaleFactor,
-                                        x2: coordinates.x2 * unscaleFactor,
-                                        y2: coordinates.y2 * unscaleFactor,
-                                        aspect_ratio: coordinates.aspect_ratio,
-                                        frame_original_width: frameWidth,
-                                        frame_original_height: frameHeight
-                                    };
-
-                                    console.log('Unscaled coordinates for composite (original frame dimensions):', unscaledCoordinates);
-
-                                    console.log('Compositing images with frame:', frameImageUrl);
-                                    $.ajax({
-                                        url: myAjax.ajaxurl,
-                                        type: 'POST',
-                                        data: {
-                                            action: 'composite_images',
-                                            frame_image_url: frameImageUrl,
-                                            edited_image_url: croppedImageUrl,
-                                            coordinates: unscaledCoordinates,
-                                            nonce: myAjax.nonce
-                                        },
-                                        success: function (compositeResponse) {
-                                            console.log('Composite AJAX response:', compositeResponse);
-                                            if (compositeResponse.success) {
-                                                console.log('Composited image URL:', compositeResponse.data.composite_url);
-                                                showPreviewModal(compositeResponse.data.composite_url);
-                                            } else {
-                                                console.error('Failed to composite image:', compositeResponse.data);
-                                                alert('Failed to generate preview: ' + (compositeResponse.data || 'Unknown error'));
-                                                showPreviewModal(croppedImageUrl);
-                                            }
-                                        },
-                                        error: function (xhr, status, error) {
-                                            console.error('Composite AJAX error:', status, error);
-                                            console.log('Response Text:', xhr.responseText);
-                                            alert('Failed to generate preview. Please check the server logs for more details.');
-                                            showPreviewModal(croppedImageUrl);
-                                        }
-                                    });
-                                };
-                                frameImg.onerror = function () {
-                                    console.error('Failed to load frame image:', frameImageUrl);
-                                    alert('Failed to load frame image for compositing.');
-                                    showPreviewModal(croppedImageUrl);
-                                };
-                                frameImg.src = frameImageUrl;
-                            } else {
-                                console.error('Failed to save cropped image:', response.data);
-                                alert('Failed to save cropped image for preview.');
-                                showPreviewModal(imageUrl);
-                            }
-                        },
-                        error: function (xhr, status, error) {
-                            console.error('AJAX error while saving cropped image:', status, error);
-                            alert('Failed to save cropped image for preview.');
-                            showPreviewModal(imageUrl);
-                        }
-                    });
-                });
-            } else {
-                console.log('Frame image or coordinates not available, skipping composite preview');
-                showPreviewModal(imageUrl);
-            }
-        } else {
-            console.log('No custom ratios received, skipping preview compositing');
-            showPreviewModal(imageUrl);
+        if (hasFrameImage) {
+            updateProductImage();
         }
     });
 
     $(document).on('click', '.edit-image-btn', function () {
         currentImageIndex = parseInt($(this).attr('data-index'), 10);
         console.log('Editing image at index:', currentImageIndex);
+        updatedCropCoordinates = null;
         editorModal.show();
         initializeModal();
     });
@@ -384,334 +434,189 @@ jQuery(document).ready(function ($) {
                 },
             });
 
+            editorInstance.on('crop', function (event) {
+                updatedCropCoordinates = {
+                    x1: event.x,
+                    y1: event.y,
+                    x2: event.x + event.width,
+                    y2: event.y + event.height,
+                    aspect_ratio: event.width / event.height
+                };
+                console.log('Updated crop coordinates:', updatedCropCoordinates);
+            });
+
             setTimeout(() => {
                 frameTemplate = myAjax.frame_template || {};
-                const coordinates = frameTemplate.coordinates || {
-                    x1: 0,
-                    y1: 0,
-                    x2: 0,
-                    y2: 0,
-                    aspect_ratio: 0
-                };
-                console.log('Parsed frame template coordinates:', coordinates);
-
+                let coordinates = frameTemplate.coordinates || (galleryOption === 'single_image' ? { x1: 0, y1: 0, x2: 0, y2: 0, aspect_ratio: 0 } : []);
                 hasFrameImage = frameTemplate.frame_image_url && frameTemplate.frame_image_url.trim() !== '';
-                const hasValidAspectRatio = parseFloat(coordinates.aspect_ratio) > 0;
-                const hasValidCoordinates = coordinates.x1 !== 0 || coordinates.y1 !== 0 || coordinates.x2 !== 0 || coordinates.y2 !== 0;
 
-                isUsingCustomRatios = hasValidCoordinates && hasFrameImage && hasValidAspectRatio;
-                console.log('Custom ratios ' + (isUsingCustomRatios ? 'are' : 'are not') + ' used');
+                let cropCoords = isMultipleImageProduct ? (coordinates[currentImageIndex] || coordinates[0] || { x1: 0, y1: 0, x2: 0, y2: 0, aspect_ratio: 0 }) : coordinates;
+
+                const hasValidAspectRatio = parseFloat(cropCoords.aspect_ratio) > 0;
+                const hasValidCoordinates = cropCoords.x1 != 0 || cropCoords.y1 != 0 || cropCoords.x2 != 0 || cropCoords.y2 != 0;
+                isUsingCustomRatios = hasFrameImage && hasValidCoordinates && hasValidAspectRatio;
 
                 if (isUsingCustomRatios) {
                     const canvasSize = editorInstance.getCanvasSize();
-                    console.log('Editor canvas size:', canvasSize);
-
                     const img = new Image();
                     img.onload = function () {
                         const originalWidth = img.width;
                         const originalHeight = img.height;
-                        console.log('Original image dimensions:', { width: originalWidth, height: originalHeight });
-
                         const scaleX = canvasSize.width / originalWidth;
                         const scaleY = canvasSize.height / originalHeight;
-                        console.log('Scaling factors:', { scaleX, scaleY });
 
-                        const roundedScaleX = Number(scaleX.toFixed(4));
-                        const roundedScaleY = Number(scaleY.toFixed(4));
-                        console.log('Rounded scaling factors:', { scaleX: roundedScaleX, scaleY: roundedScaleY });
-
-                        let scaledX1 = coordinates.x1 * roundedScaleX;
-                        let scaledY1 = coordinates.y1 * roundedScaleY;
-                        let scaledX2 = coordinates.x2 * roundedScaleX;
-                        let scaledY2 = coordinates.y2 * roundedScaleY;
-                        console.log('Scaled coordinates for canvas:', { x1: scaledX1, y1: scaledY1, x2: scaledX2, y2: scaledY2 });
-
+                        let scaledX1 = (cropCoords.x1 || 0) * scaleX;
+                        let scaledY1 = (cropCoords.y1 || 0) * scaleY;
+                        let scaledX2 = (cropCoords.x2 || 0) * scaleX;
+                        let scaledY2 = (cropCoords.y2 || 0) * scaleY;
                         let cropWidth = scaledX2 - scaledX1;
                         let cropHeight = scaledY2 - scaledY1;
-
-                        lockedAspectRatio = coordinates.aspect_ratio;
-                        console.log('Using admin-provided aspect ratio:', lockedAspectRatio);
+                        lockedAspectRatio = cropCoords.aspect_ratio || 1;
 
                         if (scaledX2 > canvasSize.width || scaledY2 > canvasSize.height || scaledX1 < 0 || scaledY1 < 0) {
-                            console.log('Crop coordinates exceed canvas bounds, adjusting...');
                             const maxWidth = canvasSize.width;
                             const maxHeight = canvasSize.height;
-
-                            const scaleToFitWidth = maxWidth / cropWidth;
-                            const scaleToFitHeight = maxHeight / cropHeight;
-                            const scaleToFit = Math.min(scaleToFitWidth, scaleToFitHeight);
-
+                            const scaleToFit = Math.min(maxWidth / cropWidth, maxHeight / cropHeight);
                             cropWidth = cropWidth * scaleToFit;
                             cropHeight = cropWidth / lockedAspectRatio;
-
                             scaledX1 = (canvasSize.width - cropWidth) / 2;
                             scaledY1 = (canvasSize.height - cropHeight) / 2;
                             scaledX2 = scaledX1 + cropWidth;
                             scaledY2 = scaledY1 + cropHeight;
-
-                            const displayScaledX1 = Number(scaledX1.toFixed(2));
-                            const displayScaledY1 = Number(scaledY1.toFixed(2));
-                            const displayScaledX2 = Number(scaledX2.toFixed(2));
-                            const displayScaledY2 = Number(scaledY2.toFixed(2));
-                            const displayCropWidth = Number(cropWidth.toFixed(2));
-                            const displayCropHeight = Number(cropHeight.toFixed(2));
-
-                            console.log('Adjusted scaled coordinates:', { x1: displayScaledX1, y1: displayScaledY1, x2: displayScaledX2, y2: displayScaledY2 });
-                            console.log('Adjusted crop dimensions:', { width: displayCropWidth, height: displayCropHeight });
-
-                            const finalAspectRatio = cropWidth / cropHeight;
-                            console.log('Final aspect ratio after adjustment:', finalAspectRatio);
-                            console.log('Difference from admin-provided aspect ratio:', Math.abs(finalAspectRatio - lockedAspectRatio));
                         }
 
-                        try {
-                            editorInstance.startDrawingMode('CROPPER');
+                        editorInstance.startDrawingMode('CROPPER');
+                        const fabricCanvas = editorInstance._graphics._canvas;
+                        if (fabricCanvas) {
+                            const cropZoneObject = fabricCanvas.getObjects().find(obj => obj.type === 'cropzone');
+                            if (cropZoneObject) {
+                                cropZoneObject.set({
+                                    left: scaledX1 + cropWidth / 2,
+                                    top: scaledY1 + cropHeight / 2,
+                                    width: cropWidth,
+                                    height: cropHeight,
+                                    scaleX: 1,
+                                    scaleY: 1,
+                                    lockUniScaling: true,
+                                    uniformScaling: true,
+                                    lockRotation: true,
+                                    lockScalingFlip: true,
+                                    selectable: true,
+                                    evented: true
+                                });
+                                cropZoneObject.setControlsVisibility({
+                                    mt: false,
+                                    mb: false,
+                                    ml: false,
+                                    mr: false,
+                                    tl: true,
+                                    tr: true,
+                                    bl: true,
+                                    br: true,
+                                    mtr: false
+                                });
 
-                            const enforceCropZone = () => {
-                                let fabricCanvas;
-                                try {
-                                    fabricCanvas = editorInstance._graphics._canvas;
-                                } catch (err) {
-                                    console.error('Failed to access Fabric.js canvas:', err);
-                                    return;
-                                }
+                                fabricCanvas.on('mouse:down', (e) => {
+                                    const isRightClick = e.e.button === 2;
+                                    const cropZoneObject = fabricCanvas.getObjects().find(obj => obj.type === 'cropzone');
+                                    if (cropZoneObject && !e.target) {
+                                        console.log(`Preventing ${isRightClick ? 'right-click' : 'left-click'} drag to draw new crop area`);
+                                        e.e.preventDefault();
+                                        e.e.stopPropagation();
+                                        fabricCanvas.setActiveObject(cropZoneObject);
+                                    }
+                                });
 
-                                if (fabricCanvas) {
-                                    console.log('Fabric.js canvas accessed successfully');
+                                fabricCanvas.wrapperEl.addEventListener('contextmenu', (e) => {
+                                    console.log('Preventing right-click context menu');
+                                    e.preventDefault();
+                                });
 
-                                    fabricCanvas.on('mouse:down', (e) => {
-                                        const isRightClick = e.e.button === 2;
-                                        const cropZoneObject = fabricCanvas.getObjects().find(obj => obj.type === 'cropzone');
-                                        if (cropZoneObject && !e.target) {
-                                            console.log(`Preventing ${isRightClick ? 'right-click' : 'left-click'} drag to draw new crop area`);
-                                            e.e.preventDefault();
-                                            e.e.stopPropagation();
-                                            fabricCanvas.setActiveObject(cropZoneObject);
-                                        }
-                                    });
-
-                                    fabricCanvas.wrapperEl.addEventListener('contextmenu', (e) => {
-                                        console.log('Preventing right-click context menu');
-                                        e.preventDefault();
-                                    });
-
-                                    fabricCanvas.on('mouse:up', () => {
-                                        const cropZoneObject = fabricCanvas.getObjects().find(obj => obj.type === 'cropzone');
-                                        if (cropZoneObject) {
-                                            const currentWidth = cropZoneObject.width * cropZoneObject.scaleX;
-                                            const currentHeight = cropZoneObject.height * cropZoneObject.scaleY;
-                                            const currentAspectRatio = currentWidth / currentHeight;
-
-                                            if (Math.abs(currentAspectRatio - lockedAspectRatio) > 0.01) {
-                                                console.log('Adjusting crop box after drag to enforce aspect ratio');
-                                                const newHeight = currentWidth / lockedAspectRatio;
-                                                setTimeout(() => {
-                                                    const updatedCropZoneObject = fabricCanvas.getObjects().find(obj => obj.type === 'cropzone');
-                                                    if (updatedCropZoneObject) {
-                                                        updatedCropZoneObject.set({
-                                                            height: newHeight / updatedCropZoneObject.scaleX,
-                                                            scaleY: updatedCropZoneObject.scaleX,
-                                                        });
-                                                        console.log('Aspect ratio enforced after drag:', {
-                                                            width: (updatedCropZoneObject.width * updatedCropZoneObject.scaleX).toFixed(2),
-                                                            height: (updatedCropZoneObject.height * updatedCropZoneObject.scaleY).toFixed(2),
-                                                            aspectRatio: (updatedCropZoneObject.width * updatedCropZoneObject.scaleX / (updatedCropZoneObject.height * updatedCropZoneObject.scaleY)).toFixed(4),
-                                                        });
-                                                        fabricCanvas.renderAll();
-                                                    } else {
-                                                        console.warn('Crop zone object not found after mouse:up');
-                                                    }
-                                                }, 0);
-                                            }
-                                        } else {
-                                            console.warn('Crop zone object not found on mouse:up');
-                                        }
-                                    });
-
-                                    const findCropZoneObject = (attempt = 1) => {
-                                        const maxAttempts = 10;
-                                        const cropZoneObject = fabricCanvas.getObjects().find(obj => obj.type === 'cropzone');
-                                        if (cropZoneObject) {
-                                            console.log('Crop zone object found on attempt:', attempt);
-
+                                fabricCanvas.on('mouse:up', () => {
+                                    const cropZoneObject = fabricCanvas.getObjects().find(obj => obj.type === 'cropzone');
+                                    if (cropZoneObject) {
+                                        const currentWidth = cropZoneObject.width * cropZoneObject.scaleX;
+                                        const currentHeight = cropZoneObject.height * cropZoneObject.scaleY;
+                                        if (Math.abs(currentWidth / currentHeight - lockedAspectRatio) > 0.01) {
                                             cropZoneObject.set({
-                                                left: scaledX1 + cropWidth / 2,
-                                                top: scaledY1 + cropHeight / 2,
-                                                width: cropWidth,
-                                                height: cropHeight,
-                                                scaleX: 1,
-                                                scaleY: 1,
-                                                lockScalingX: false,
-                                                lockScalingY: false,
-                                                lockUniScaling: true,
-                                                uniformScaling: true,
-                                                hasControls: true,
-                                                lockRotation: true,
-                                                lockScalingFlip: true,
-                                                lockSkewingX: true,
-                                                lockSkewingY: true,
-                                                selectable: true,
-                                                evented: true,
+                                                height: currentWidth / lockedAspectRatio / cropZoneObject.scaleX,
+                                                scaleY: cropZoneObject.scaleX
                                             });
-
-                                            cropZoneObject.setControlsVisibility({
-                                                mt: false,
-                                                mb: false,
-                                                ml: false,
-                                                mr: false,
-                                                tl: true,
-                                                tr: true,
-                                                bl: true,
-                                                br: true,
-                                                mtr: false
-                                            });
-                                            console.log('Midpoint controls disabled (mt, mb, ml, mr)');
-
-                                            cropZoneObject.on('scaling', () => {
-                                                const currentWidth = cropZoneObject.width * cropZoneObject.scaleX;
-                                                const currentHeight = cropZoneObject.height * cropZoneObject.scaleY;
-                                                const currentAspectRatio = currentWidth / currentHeight;
-
-                                                if (Math.abs(currentAspectRatio - lockedAspectRatio) > 0.01) {
-                                                    const newHeight = currentWidth / lockedAspectRatio;
-                                                    cropZoneObject.set({
-                                                        height: newHeight / cropZoneObject.scaleX,
-                                                        scaleY: cropZoneObject.scaleX,
-                                                    });
-                                                    console.log('Aspect ratio enforced during scaling:', {
-                                                        width: (cropZoneObject.width * cropZoneObject.scaleX).toFixed(2),
-                                                        height: (cropZoneObject.height * cropZoneObject.scaleY).toFixed(2),
-                                                        aspectRatio: (cropZoneObject.width * cropZoneObject.scaleX / (cropZoneObject.height * cropZoneObject.scaleY)).toFixed(4),
-                                                    });
-                                                }
-                                                fabricCanvas.renderAll();
-                                            });
-
-                                            cropZoneObject.off('moving');
-                                            cropZoneObject.on('moving', () => {
-                                                // Get the underlying image object
-                                                const imageObject = fabricCanvas.getObjects().find(obj => obj.type === 'image');
-                                                if (!imageObject) {
-                                                    console.warn('Underlying image object not found');
-                                                    return;
-                                                }
-
-                                                // Get image dimensions and position
-                                                const imageWidth = imageObject.width * imageObject.scaleX;
-                                                const imageHeight = imageObject.height * imageObject.scaleY;
-                                                const imageLeft = imageObject.left - (imageWidth / 2); // Image left edge
-                                                const imageTop = imageObject.top - (imageHeight / 2); // Image top edge
-                                                const imageRight = imageObject.left + (imageWidth / 2); // Image right edge
-                                                const imageBottom = imageObject.top + (imageHeight / 2); // Image bottom edge
-
-                                                const cropZoneWidth = cropZoneObject.width * cropZoneObject.scaleX;
-                                                const cropZoneHeight = cropZoneObject.height * cropZoneObject.scaleY;
-
-                                                // Calculate the actual edges of the crop box
-                                                const actualLeft = cropZoneObject.left - (cropZoneWidth / 2);
-                                                const actualTop = cropZoneObject.top - (cropZoneHeight / 2);
-                                                const actualRight = cropZoneObject.left + (cropZoneWidth / 2);
-                                                const actualBottom = cropZoneObject.top + (cropZoneHeight / 2);
-
-                                                // Boundary checks relative to the image's bounds
-                                                if (actualLeft < imageLeft) {
-                                                    cropZoneObject.set({ left: imageLeft + (cropZoneWidth / 2) });
-                                                }
-                                                if (actualTop < imageTop) {
-                                                    cropZoneObject.set({ top: imageTop + (cropZoneHeight / 2) });
-                                                }
-                                                if (actualRight > imageRight) {
-                                                    cropZoneObject.set({ left: imageRight - (cropZoneWidth / 2) });
-                                                }
-                                                if (actualBottom > imageBottom) {
-                                                    cropZoneObject.set({ top: imageBottom - (cropZoneHeight / 2) });
-                                                }
-
-                                                console.log('Image bounds:', {
-                                                    imageLeft: imageLeft.toFixed(2),
-                                                    imageTop: imageTop.toFixed(2),
-                                                    imageRight: imageRight.toFixed(2),
-                                                    imageBottom: imageBottom.toFixed(2),
-                                                });
-
-                                                console.log('Crop zone position after moving:', {
-                                                    left: cropZoneObject.left.toFixed(2),
-                                                    top: cropZoneObject.top.toFixed(2),
-                                                    actualLeft: (cropZoneObject.left - (cropZoneWidth / 2)).toFixed(2),
-                                                    actualTop: (cropZoneObject.top - (cropZoneHeight / 2)).toFixed(2),
-                                                    actualRight: (cropZoneObject.left + (cropZoneWidth / 2)).toFixed(2),
-                                                    actualBottom: (cropZoneObject.top + (cropZoneHeight / 2)).toFixed(2),
-                                                });
-
-                                                fabricCanvas.renderAll();
-                                            });
-
                                             fabricCanvas.renderAll();
-                                            console.log('Crop zone set with dimensions:', {
-                                                left: Number(cropZoneObject.left.toFixed(2)),
-                                                top: Number(cropZoneObject.top.toFixed(2)),
-                                                width: Number((cropZoneObject.width * cropZoneObject.scaleX).toFixed(2)),
-                                                height: Number((cropZoneObject.height * cropZoneObject.scaleY).toFixed(2)),
-                                                aspectRatio: Number(((cropZoneObject.width * cropZoneObject.scaleX) / (cropZoneObject.height * cropZoneObject.scaleY)).toFixed(4)),
-                                            });
-                                            console.log('Crop zone properties:', {
-                                                lockScalingX: cropZoneObject.lockScalingX,
-                                                lockScalingY: cropZoneObject.lockScalingY,
-                                                hasControls: cropZoneObject.hasControls,
-                                                lockRotation: cropZoneObject.lockRotation,
-                                                lockScalingFlip: cropZoneObject.lockScalingFlip,
-                                                lockSkewingX: cropZoneObject.lockSkewingX,
-                                                lockSkewingY: cropZoneObject.lockSkewingY,
-                                                selectable: cropZoneObject.selectable,
-                                                evented: cropZoneObject.evented,
-                                                lockUniScaling: cropZoneObject.lockUniScaling,
-                                                uniformScaling: cropZoneObject.uniformScaling,
-                                            });
-                                        } else if (attempt < maxAttempts) {
-                                            console.log('Crop zone object not found on attempt:', attempt);
-                                            setTimeout(() => findCropZoneObject(attempt + 1), 500);
-                                        } else {
-                                            console.log('Crop zone object not found after', maxAttempts, 'attempts.');
                                         }
-                                    };
+                                    }
+                                });
 
-                                    findCropZoneObject();
-                                }
-                            };
+                                cropZoneObject.on('moving', () => {
+                                    const imageObject = fabricCanvas.getObjects().find(obj => obj.type === 'image');
+                                    if (imageObject) {
+                                        const imageWidth = imageObject.width * imageObject.scaleX;
+                                        const imageHeight = imageObject.height * imageObject.scaleY;
+                                        const imageLeft = imageObject.left - (imageWidth / 2);
+                                        const imageTop = imageObject.top - (imageHeight / 2);
+                                        const imageRight = imageObject.left + (imageWidth / 2);
+                                        const imageBottom = imageObject.top + (imageHeight / 2);
+                                        const cropZoneWidth = cropZoneObject.width * cropZoneObject.scaleX;
+                                        const cropZoneHeight = cropZoneObject.height * cropZoneObject.scaleY;
+                                        const actualLeft = cropZoneObject.left - (cropZoneWidth / 2);
+                                        const actualTop = cropZoneObject.top - (cropZoneHeight / 2);
+                                        const actualRight = cropZoneObject.left + (cropZoneWidth / 2);
+                                        const actualBottom = cropZoneObject.top + (cropZoneHeight / 2);
 
-                            const monitorCropMode = (attempt = 1) => {
-                                const maxAttempts = 5;
-                                const cropButton = document.querySelector('.tie-btn-crop.tui-image-editor-item');
-                                if (cropButton) {
-                                    console.log('Crop button found on attempt:', attempt);
-                                    cropButton.addEventListener('click', () => {
-                                        console.log('Crop mode activated, reapplying crop zone');
-                                        setTimeout(() => {
-                                            editorInstance.stopDrawingMode();
-                                            editorInstance.startDrawingMode('CROPPER');
-                                            enforceCropZone();
-                                        }, 200);
-                                    });
-                                } else if (attempt < maxAttempts) {
-                                    console.log('Crop button not found, retrying attempt:', attempt);
-                                    setTimeout(() => monitorCropMode(attempt + 1), 500);
-                                }
-                            };
+                                        if (actualLeft < imageLeft) cropZoneObject.set({ left: imageLeft + (cropZoneWidth / 2) });
+                                        if (actualTop < imageTop) cropZoneObject.set({ top: imageTop + (cropZoneHeight / 2) });
+                                        if (actualRight > imageRight) cropZoneObject.set({ left: imageRight - (cropZoneWidth / 2) });
+                                        if (actualBottom > imageBottom) cropZoneObject.set({ top: imageBottom - (cropZoneHeight / 2) });
+                                        fabricCanvas.renderAll();
+                                    }
+                                });
 
-                            setTimeout(() => {
-                                enforceCropZone();
+                                const monitorCropMode = (attempt = 1) => {
+                                    const maxAttempts = 5;
+                                    const cropButton = document.querySelector('.tie-btn-crop.tui-image-editor-item');
+                                    if (cropButton) {
+                                        console.log('Crop button found on attempt:', attempt);
+                                        cropButton.addEventListener('click', () => {
+                                            console.log('Crop mode activated, reapplying crop zone');
+                                            setTimeout(() => {
+                                                editorInstance.stopDrawingMode();
+                                                editorInstance.startDrawingMode('CROPPER');
+                                                const cropZoneObject = fabricCanvas.getObjects().find(obj => obj.type === 'cropzone');
+                                                if (cropZoneObject) {
+                                                    cropZoneObject.set({
+                                                        left: scaledX1 + cropWidth / 2,
+                                                        top: scaledY1 + cropHeight / 2,
+                                                        width: cropWidth,
+                                                        height: cropHeight,
+                                                        scaleX: 1,
+                                                        scaleY: 1,
+                                                        lockUniScaling: true,
+                                                        uniformScaling: true,
+                                                        lockRotation: true,
+                                                        lockScalingFlip: true,
+                                                        selectable: true,
+                                                        evented: true
+                                                    });
+                                                    fabricCanvas.renderAll();
+                                                }
+                                            }, 200);
+                                        });
+                                    } else if (attempt < maxAttempts) {
+                                        console.log('Crop button not found, retrying attempt:', attempt);
+                                        setTimeout(() => monitorCropMode(attempt + 1), 500);
+                                    }
+                                };
                                 monitorCropMode();
-                            }, 2000);
-                        } catch (err) {
-                            console.error('Failed to apply crop zone:', err);
+
+                                fabricCanvas.renderAll();
+                            }
                         }
                     };
                     img.onerror = function () {
-                        console.error('Failed to load image for scaling:', initialImageSrc);
+                        console.error('Failed to load image for editor scaling:', initialImageSrc);
                     };
                     img.src = initialImageSrc;
                 } else {
-                    console.log('No valid crop coordinates or frame image; enabling default crop functionality');
                     editorInstance.startDrawingMode('CROPPER');
                 }
             }, 1000);
@@ -720,12 +625,7 @@ jQuery(document).ready(function ($) {
                 const headerButtonsContainer = editorElement.querySelector('.tui-image-editor-header-buttons');
                 if (headerButtonsContainer) {
                     const downloadButton = headerButtonsContainer.querySelector('.tui-image-editor-download-btn');
-                    if (downloadButton) {
-                        downloadButton.remove();
-                        console.log('Default Download button removed');
-                    } else {
-                        console.log('Download button not found');
-                    }
+                    if (downloadButton) downloadButton.remove();
 
                     const doneButton = document.createElement('button');
                     doneButton.textContent = 'Done';
@@ -733,67 +633,52 @@ jQuery(document).ready(function ($) {
                     doneButton.style.backgroundColor = '#fdba3b';
                     doneButton.style.color = '#fff';
                     doneButton.style.border = '0';
-                    doneButton.style.padding = '';
                     doneButton.style.cursor = 'pointer';
-
                     headerButtonsContainer.appendChild(doneButton);
-                    console.log('New Done button added');
 
                     doneButton.addEventListener('click', function (event) {
                         event.preventDefault();
-                        event.stopPropagation();
-
                         doneButton.disabled = true;
                         doneButton.style.opacity = '0.5';
-                        console.log('Done button disabled during processing');
 
-                        const editedImageDataUrl = editorInstance.toDataURL();
+                        if (editorInstance.getDrawingMode() === 'CROPPER') {
+                            editorInstance.crop(editorInstance.getCropzoneRect()).then(() => {
+                                processImageAfterCrop();
+                            }).catch(() => {
+                                processImageAfterCrop();
+                            });
+                        } else {
+                            processImageAfterCrop();
+                        }
 
-                        getImagePixelData(editedImageDataUrl, function (editedData) {
-                            const isDifferent = areImagesDifferent(originalImageData, editedData);
-                            console.log('Images are different:', isDifferent);
-
-                            if (isDifferent) {
-                                $.ajax({
-                                    url: myAjax.ajaxurl,
-                                    type: 'POST',
-                                    data: {
-                                        action: 'save_edited_image',
-                                        image_data: editedImageDataUrl,
-                                        nonce: myAjax.nonce,
-                                    },
-                                    success: function (response) {
-                                        console.log('AJAX response:', response);
-                                        if (response.success) {
-                                            console.log('Image saved successfully:', response.data);
-                                            const newAttachmentId = response.data.attachment_id;
-                                            const newImageUrl = response.data.file_url;
-                                            console.log('New attachment ID:', newAttachmentId);
-                                            console.log('New image URL:', newImageUrl);
-
-                                            const currentImageThumb = imageThumbs.eq(currentImageIndex);
-                                            const imageSelectionContainer = currentImageThumb.closest('.image-selection-container');
-                                            const selectedImageIdsInput = imageSelectionContainer.find('.selected-image-ids');
-                                            if (selectedImageIdsInput.length) {
+                        function processImageAfterCrop() {
+                            const editedImageDataUrl = editorInstance.toDataURL();
+                            getImagePixelData(editedImageDataUrl, function (editedData) {
+                                if (areImagesDifferent(originalImageData, editedData)) {
+                                    $.ajax({
+                                        url: myAjax.ajaxurl,
+                                        type: 'POST',
+                                        data: {
+                                            action: 'save_edited_image',
+                                            image_data: editedImageDataUrl,
+                                            nonce: myAjax.nonce,
+                                        },
+                                        success: function (response) {
+                                            if (response.success) {
+                                                const newAttachmentId = response.data.attachment_id;
+                                                const newImageUrl = response.data.file_url;
+                                                const currentImageThumb = imageThumbs.eq(currentImageIndex);
+                                                const selectedImageIdsInput = currentImageThumb.closest('.image-selection-container').find('.selected-image-ids');
                                                 let selectedImageIds = selectedImageIdsInput.val().split(',').filter(Boolean);
                                                 const index = selectedImageIds.indexOf(originalImageId);
                                                 if (index !== -1) {
                                                     selectedImageIds[index] = newAttachmentId;
                                                     selectedImageIdsInput.val(selectedImageIds.join(','));
-                                                    console.log('Updated selected image IDs:', selectedImageIds.join(','));
-                                                } else {
-                                                    console.error('Original image ID not found in selected image IDs');
                                                 }
-                                            } else {
-                                                console.error('selected-image-ids input not found');
-                                            }
 
-                                            const parentSelectedImage = currentImageThumb.closest('.selected-image');
-                                            if (parentSelectedImage.length) {
+                                                const parentSelectedImage = currentImageThumb.closest('.selected-image');
                                                 parentSelectedImage.attr('data-id', newAttachmentId);
-                                                console.log('Updated data-id of .selected-image to:', newAttachmentId);
-
-                                                parentSelectedImage.find('.edit-image-btn, .preview-image-btn').remove();
+                                                parentSelectedImage.find('.edit-image-btn').remove();
 
                                                 const editButton = $('<button>')
                                                     .addClass('edit-image-btn')
@@ -812,141 +697,39 @@ jQuery(document).ready(function ($) {
                                                     .attr('data-index', currentImageIndex);
                                                 parentSelectedImage.append(editButton);
 
-                                                if (isUsingCustomRatios) {
-                                                    const previewButton = $('<button>')
-                                                        .addClass('preview-image-btn')
-                                                        .text('Preview')
-                                                        .css({
-                                                            backgroundColor: '#007BFF',
-                                                            color: '#fff',
-                                                            border: 'none',
-                                                            padding: '5px 10px',
-                                                            cursor: 'pointer',
-                                                            marginTop: '5px',
-                                                            display: 'block',
-                                                            marginLeft: 'auto',
-                                                            marginRight: 'auto'
-                                                        })
-                                                        .attr('data-index', currentImageIndex);
-                                                    parentSelectedImage.append(previewButton);
-                                                }
-                                            } else {
-                                                console.error('Parent .selected-image not found');
-                                            }
-
-                                            if (currentImageThumb.length && newImageUrl) {
                                                 currentImageThumb.attr('src', newImageUrl);
-                                                console.log('Updated imageThumb src to:', newImageUrl);
 
-                                                if (isUsingCustomRatios) {
-                                                    const frameImageUrl = frameTemplate.frame_image_url;
-                                                    let coordinates = frameTemplate.coordinates;
-                                                    if (frameImageUrl && coordinates.x1 !== 0 && coordinates.y1 !== 0 && coordinates.x2 !== 0 && coordinates.y2 !== 0) {
-                                                        console.log('Coordinates (pre-scaled to 1200px):', coordinates);
-
-                                                        const frameImg = new Image();
-                                                        frameImg.crossOrigin = 'Anonymous';
-                                                        frameImg.onload = function () {
-                                                            const frameWidth = frameImg.width;
-                                                            const frameHeight = frameImg.height;
-                                                            console.log('Frame image dimensions:', { width: frameWidth, height: frameHeight });
-
-                                                            const previewWidth = 1200;
-                                                            const unscaleFactor = frameWidth / previewWidth;
-                                                            const unscaledCoordinates = {
-                                                                x1: coordinates.x1 * unscaleFactor,
-                                                                y1: coordinates.y1 * unscaleFactor,
-                                                                x2: coordinates.x2 * unscaleFactor,
-                                                                y2: coordinates.y2 * unscaleFactor,
-                                                                aspect_ratio: coordinates.aspect_ratio,
-                                                                frame_original_width: frameWidth,
-                                                                frame_original_height: frameHeight
-                                                            };
-
-                                                            console.log('Unscaled coordinates for composite (original frame dimensions):', unscaledCoordinates);
-
-                                                            console.log('Compositing images with frame:', frameImageUrl);
-                                                            $.ajax({
-                                                                url: myAjax.ajaxurl,
-                                                                type: 'POST',
-                                                                data: {
-                                                                    action: 'composite_images',
-                                                                    frame_image_url: frameImageUrl,
-                                                                    edited_image_url: newImageUrl,
-                                                                    coordinates: unscaledCoordinates,
-                                                                    nonce: myAjax.nonce
-                                                                },
-                                                                success: function (compositeResponse) {
-                                                                    console.log('Composite AJAX response:', compositeResponse);
-                                                                    if (compositeResponse.success) {
-                                                                        console.log('Composited image URL:', compositeResponse.data.composite_url);
-                                                                        showPreviewModal(compositeResponse.data.composite_url);
-                                                                    } else {
-                                                                        console.error('Failed to composite image:', compositeResponse.data);
-                                                                        alert('Failed to generate preview: ' + (compositeResponse.data || 'Unknown error'));
-                                                                        showPreviewModal(newImageUrl);
-                                                                    }
-                                                                },
-                                                                error: function (xhr, status, error) {
-                                                                    console.error('Composite AJAX error:', status, error);
-                                                                    console.log('Response Text:', xhr.responseText);
-                                                                    alert('Failed to generate preview. Please check the server logs for more details.');
-                                                                    showPreviewModal(newImageUrl);
-                                                                }
-                                                            });
-                                                        };
-                                                        frameImg.onerror = function () {
-                                                            console.error('Failed to load frame image:', frameImageUrl);
-                                                            alert('Failed to load frame image for compositing.');
-                                                            showPreviewModal(newImageUrl);
-                                                        };
-                                                        frameImg.src = frameImageUrl;
+                                                if (hasFrameImage) {
+                                                    // Update the composite image with the newly edited image
+                                                    if (isMultipleImageProduct) {
+                                                        updateProductImage(); // For multiple images, use all selected images
                                                     } else {
-                                                        console.log('Frame image or coordinates not available, skipping composite preview');
-                                                        showPreviewModal(newImageUrl);
+                                                        updateProductImage(newImageUrl); // For single image, use the edited image
                                                     }
-                                                } else {
-                                                    console.log('No custom ratios received, skipping preview compositing');
                                                 }
                                             } else {
-                                                console.error('Failed to update imageThumb src');
+                                                console.error('Failed to save edited image:', response);
                                             }
-                                        } else {
-                                            console.error('Failed to save image:', response.data);
-                                        }
-                                    },
-                                    error: function (xhr, status, error) {
-                                        console.error('AJAX error:', status, error);
-                                    },
-                                    complete: function () {
-                                        if (editorInstance) {
+                                        },
+                                        error: function (xhr, status, error) {
+                                            console.error('AJAX error saving edited image:', { status, error, responseText: xhr.responseText });
+                                        },
+                                        complete: function () {
                                             editorInstance.destroy();
                                             editorInstance = null;
-                                            console.log('Editor destroyed');
+                                            editorModal.hide();
                                         }
-                                        editorModal.hide();
-                                        console.log('Editor modal closed after Done');
-                                    }
-                                });
-                            } else {
-                                console.log('Image unchanged, skipping save');
-                                if (editorInstance) {
+                                    });
+                                } else {
                                     editorInstance.destroy();
                                     editorInstance = null;
-                                    console.log('Editor destroyed');
+                                    editorModal.hide();
                                 }
-                                editorModal.hide();
-                                console.log('Editor modal closed after Done (no changes)');
-                            }
-                        });
+                            });
+                        }
                     });
-                } else {
-                    console.log('Header buttons container not found');
                 }
             }, 500);
-            console.log('Editor instance created:', editorInstance);
-        } else {
-            console.log('Editor element not found');
         }
     }
 
@@ -954,7 +737,6 @@ jQuery(document).ready(function ($) {
         if (editorInstance) {
             editorInstance.destroy();
             editorInstance = null;
-            console.log('Editor destroyed');
         }
         editorModal.hide();
     });
@@ -1003,6 +785,11 @@ jQuery(document).ready(function ($) {
         }
 
         updateSelectedCount();
+        if (hasFrameImage && $(this).data('galleryoption') === 'single_image') {
+            updateProductImage(imageUrl); // Pass the newly selected image URL for single image products
+        } else if (hasFrameImage) {
+            updateProductImage(); // Use selected images for multiple image products
+        }
     });
 
     $('.image-selection-container').on('click', '.remove-image', function () {
@@ -1018,7 +805,10 @@ jQuery(document).ready(function ($) {
         $(this).closest('.selected-image').remove();
         $(document).trigger('singleQtyChange', count);
 
-        $(this).siblings('.edit-image-btn, .preview-image-btn').remove();
+        checkCustomRatios();
+        if (hasFrameImage) {
+            updateProductImage();
+        }
     });
 
     function updateSelectedCount() {
@@ -1042,10 +832,6 @@ jQuery(document).ready(function ($) {
             selectedImagesForCart[productId].push(imageIds);
         });
 
-        console.log(selectedImagesForCart);
-        console.log(JSON.stringify(selectedImagesForCart));
-        console.log(Object.keys(selectedImagesForCart).length > 0);
-
         if (Object.keys(selectedImagesForCart).length > 0) {
             $('<input>').attr({
                 type: 'hidden',
@@ -1055,29 +841,17 @@ jQuery(document).ready(function ($) {
         }
     });
 
-    $('form.carsdfdft').on('submit', function (e) {
-        var groupedImagesForCart = {};
+    if (!$('.image-selection-container').length) {
+        console.warn('Image selection container not found. Gallery script initialization skipped.');
+    }
 
-        $('.selected-image-ids').each(function () {
-            var productId = $(this).closest('.image-selection-container').data('product');
-            var imageIds = $(this).val().split(',').filter(Boolean);
+    if (!myAjax || !myAjax.ajaxurl || !myAjax.nonce) {
+        console.error('myAjax object is not properly initialized. Check wp_localize_script.');
+    }
 
-            if (!groupedImagesForCart[productId]) {
-                groupedImagesForCart[productId] = [];
-            }
-
-            groupedImagesForCart[productId].push(imageIds);
-        });
-
-        console.log(groupedImagesForCart);
-        console.log(JSON.stringify(groupedImagesForCart));
-
-        if (Object.keys(groupedImagesForCart).length > 0) {
-            $('<input>').attr({
-                type: 'hidden',
-                name: 'selected_gallery_images',
-                value: JSON.stringify(groupedImagesForCart)
-            }).appendTo('form.cart');
-        }
-    });
+    // Initialize thumbnail update on page load if frame exists
+    checkCustomRatios();
+    if (hasFrameImage) {
+        updateProductImage();
+    }
 });

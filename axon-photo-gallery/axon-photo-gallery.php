@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Axon Photo Gallery
  * Description: Plugin to create Photo Galleries for clients, Easy Digital downloading, Integrated with woocommerce for gallery Products [my_photo_galleries].
- * Version: 2.1.2
+ * Version: 3.6
  * Author: Axon Technologies
  * Author URI: https://axontech.pk
  * License: GPL2
@@ -13,10 +13,25 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('AXON_PLUGIN_VERSION', '1.0.0');
-define('AXON_SCRIPTS_VERSION', '1.0.0.2');
+define('AXON_PLUGIN_VERSION', '3.6.0');
+define('AXON_SCRIPTS_VERSION', '3.6.0.0');
 define('AXON_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AXON_PLUGIN_URL', plugin_dir_url(__FILE__));
+
+// Check if WooCommerce is active
+if (!function_exists('is_plugin_active')) {
+    include_once(ABSPATH . 'wp-admin/includes/plugin.php');
+}
+
+if (!is_plugin_active('woocommerce/woocommerce.php')) {
+    add_action('admin_notices', function() {
+        echo '<div class="notice notice-error"><p>Axon Photo Gallery requires WooCommerce to be installed and activated for certain features. Please install and activate WooCommerce.</p></div>';
+    });
+} else {
+    if (is_plugin_active('woocommerce/woocommerce.php')) {
+            add_action('init', 'register_package_product_type');
+    }
+}
 
 function axon_plugin_activate() {
     add_option('axon_plugin_activated', true);
@@ -55,7 +70,7 @@ function create_photo_gallery_cpt() {
         'items_list'         => 'Photo galleries list',
         'items_list_navigation' => 'Photo galleries list navigation',
     );
-  
+
     $args = array(
         'labels'             => $labels,
         'public'             => true,
@@ -63,7 +78,7 @@ function create_photo_gallery_cpt() {
         'show_ui'            => true,
         'show_in_menu'       => true,
         'query_var'          => true,
-        'rewrite'            => array( 'slug' => 'photo-gallery' ),
+        'rewrite'            => array('slug' => 'photo-gallery'),
         'capability_type'    => 'post',
         'has_archive'        => true,
         'hierarchical'       => false,
@@ -72,25 +87,20 @@ function create_photo_gallery_cpt() {
         'menu_icon'          => 'dashicons-format-gallery',
     );
 
-    register_post_type( 'photo_gallery', $args );
+    register_post_type('photo_gallery', $args);
 }
-
-add_action( 'init', 'create_photo_gallery_cpt' );
-
+add_action('init', 'create_photo_gallery_cpt');
 
 function axon_enqueue_admin_scripts($hook) {
     wp_enqueue_style('gallery-style', plugin_dir_url(__FILE__) . '/assets/css/gallery-style.css');
     if ('post.php' !== $hook && 'post-new.php' !== $hook) return;
-        wp_enqueue_script('select2', 'https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js', ['jquery'], null, true);
-        wp_enqueue_style('select2-style', 'https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css');
+    wp_enqueue_script('select2', 'https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js', ['jquery'], null, true);
+    wp_enqueue_style('select2-style', 'https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css');
 }
 add_action('admin_enqueue_scripts', 'axon_enqueue_admin_scripts');
-function my_plugin_enqueue_styles() {
-    
-    wp_enqueue_style('gallery-style', plugin_dir_url(__FILE__) . '/assets/css/gallery-style.css',[],AXON_SCRIPTS_VERSION);
-    
 
-    //by zeeshan
+function my_plugin_enqueue_styles() {
+    wp_enqueue_style('gallery-style', plugin_dir_url(__FILE__) . '/assets/css/gallery-style.css', [], AXON_SCRIPTS_VERSION);
 
     wp_enqueue_script(
         'tui-color-picker',
@@ -107,30 +117,17 @@ function my_plugin_enqueue_styles() {
         null,
         true
     );
-    
+
     wp_enqueue_style(
         'tui-image-editor-style',
         'https://uicdn.toast.com/tui-image-editor/latest/tui-image-editor.min.css'
     );
-
-    // wp_enqueue_style(
-    //     'bootstrap-css',
-    //     'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
-    //     array(),
-    //     '5.3.0'
-    // );
-    
-    
-    // wp_enqueue_script('axon-gallery-script', plugin_dir_url(__FILE__) . 'dist/gallery-bundle.js', array(), '1.0.0', true);
-
 }
-
-// Hook into both front-end and admin hooks
-add_action( 'wp_enqueue_scripts', 'my_plugin_enqueue_styles' );
+add_action('wp_enqueue_scripts', 'my_plugin_enqueue_styles');
 
 function axon_allowed_users_metabox_callback($post) {
     $allowed_users = get_post_meta($post->ID, 'axon_allowed_users', true) ?: [];
-    
+
     wp_nonce_field('axon_allowed_users_nonce', 'axon_allowed_users_nonce');
 
     $users = get_users(['fields' => ['ID', 'display_name', 'user_email']]);
@@ -145,9 +142,9 @@ function axon_allowed_users_metabox_callback($post) {
 
     echo '<script>
             jQuery(document).ready(function($) {
-                $("#axon_allowed_users_wrapper #axon_allowed_users").select2({ 
-                    tags: true, 
-                    tokenSeparators: [","] ,
+                $("#axon_allowed_users_wrapper #axon_allowed_users").select2({
+                    tags: true,
+                    tokenSeparators: [","],
                     createTag: function(params) {
                         var emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(com)$/;
                         var term = $.trim(params.term);
@@ -160,6 +157,7 @@ function axon_allowed_users_metabox_callback($post) {
             });
           </script>';
 }
+
 function axon_gallery_metabox_callback($post) {
     $gallery_images = get_post_meta($post->ID, 'axon_gallery_images', true) ?: [];
     wp_nonce_field('axon_gallery_nonce', 'axon_gallery_nonce');
@@ -174,7 +172,7 @@ function axon_gallery_metabox_callback($post) {
                     <div class="image-footer">
                         <p class="axon-image-id">ID: ' . esc_html($image_id) . '</p>
                         <input type="hidden" name="axon_gallery_images[]" value="' . esc_attr($image_id) . '" />
-                        <button class="button del-btn remove-gallery-image">&#128465;</button>
+                        <button class="button del-btn remove-gallery-image">🗑</button>
                     </div>
                   </div>';
         }
@@ -190,7 +188,7 @@ function axon_gallery_metabox_callback($post) {
                         button: {
                             text: "Use these images"
                         },
-                        multiple: true // Enable multiple image selection
+                        multiple: true
                     });
                     frame.open();
                     frame.on("select", function() {
@@ -203,7 +201,7 @@ function axon_gallery_metabox_callback($post) {
                                 <div class="image-footer">
                                     <p class="axon-image-id">ID: ` + attachment.id + `</p>
                                     <input type="hidden" name="axon_gallery_images[]" value="` + attachment.id + `" />
-                                    <button class="button del-btn remove-gallery-image">&#128465;</button>
+                                    <button class="button del-btn remove-gallery-image">🗑</button>
                                 </div>
                             </div>`);
                         });
@@ -218,9 +216,6 @@ function axon_gallery_metabox_callback($post) {
           </script>';
 }
 
-
-
-// Save Meta Box Data
 function axon_save_gallery_meta($post_id) {
     if (!isset($_POST['axon_gallery_nonce']) || !wp_verify_nonce($_POST['axon_gallery_nonce'], 'axon_gallery_nonce')) return;
     if (!isset($_POST['axon_allowed_users_nonce']) || !wp_verify_nonce($_POST['axon_allowed_users_nonce'], 'axon_allowed_users_nonce')) return;
@@ -243,10 +238,9 @@ function axon_save_gallery_meta($post_id) {
         foreach ($allowed_users as $user) {
             if (is_numeric($user) && intval($user) > 0) {
                 $user_ids[] = intval($user);
-            }
-            elseif (filter_var($user, FILTER_VALIDATE_EMAIL)) {
+            } elseif (filter_var($user, FILTER_VALIDATE_EMAIL)) {
                 $existing_user = get_user_by('email', $user);
-                
+
                 if ($existing_user) {
                     $user_ids[] = $existing_user->ID;
                 } else {
@@ -291,46 +285,38 @@ function axon_search_users() {
 
     wp_send_json($results);
 }
-// Shortcode to display gallery
+
 function axon_gallery_shortcode($atts) {
-    // Check if you got a Post id
     $atts = shortcode_atts(['id' => ''], $atts, 'axon_gallery');
     if (empty($atts['id'])) return 'Invalid Photo Gallery';
-    
-    // Check if the user is allowed to access the gallery
+
     $allowed_users = get_post_meta($atts['id'], 'axon_allowed_users', true) ?: [];
     if (!in_array(get_current_user_id(), $allowed_users)) return 'You are not allowed to access this Photo Gallery.';
-    
-    // Check if there are any images inside the Photo Gallery
+
     $gallery_images = get_post_meta($atts['id'], 'axon_gallery_images', true) ?: [];
     if (empty($gallery_images)) return 'There are no Images in this Photo Gallery.';
-    
+
     $output = '<div class="image-mosaic">';
 
-    // Loop through the images and create the mosaic cards
     foreach ($gallery_images as $index => $image_id) {
         $image_url = wp_get_attachment_url($image_id);
-        $image_sizes = wp_get_attachment_metadata($image_id)['sizes']; // Get all available sizes
-        
-        // Alternate the class between card-tall and card-wide for variety
+        $image_sizes = wp_get_attachment_metadata($image_id)['sizes'];
+
         $card_class = 'card';
-        if ($index % 3 == 0) { // Every third image gets the 'card-wide' class
+        if ($index % 3 == 0) {
             $card_class .= ' card-wide';
         }
-        if ($index % 4 == 0) { // Every fourth image gets the 'card-tall' class
+        if ($index % 4 == 0) {
             $card_class .= ' card-tall';
         }
-        
-        // Create a checkbox for each image
+
         $output .= '<div class="' . esc_attr($card_class) . '" style="background-image: url(' . esc_url($image_url) . ')">';
         $output .= '<input type="checkbox" class="axon-image-checkbox" data-image-id="' . esc_attr($image_id) . '" style=" top: 10px; right: 10px;" />';
         $output .= '</div>';
     }
-    
-    // Close the mosaic container
+
     $output .= '</div>';
 
-    // Add size dropdown and download button below the gallery
     $output .= '<div class="donwload-container">
                     <label for="axon-size-selector">Select Image Size:</label>
                     <select id="axon-size-selector">
@@ -342,7 +328,6 @@ function axon_gallery_shortcode($atts) {
                     <button id="axon-download-selected" class="button">Download Selected Images</button>
                  </div>';
 
-    // JavaScript to handle the downloading process
     $output .= '
         <script type="text/javascript">
             document.getElementById("axon-download-selected").addEventListener("click", function() {
@@ -373,21 +358,18 @@ function axon_gallery_shortcode($atts) {
 }
 add_shortcode('axon_gallery', 'axon_gallery_shortcode');
 
-
-// Handle the download request via AJAX
 function axon_download_image() {
     if (isset($_GET['image_id']) && isset($_GET['size'])) {
         $image_id = intval($_GET['image_id']);
         $size = sanitize_text_field($_GET['size']);
-        
+
         $image_path = get_attached_file($image_id);
         $metadata = wp_get_attachment_metadata($image_id);
-        
-        // Get the path for the selected size
+
         if (isset($metadata['sizes'][$size])) {
             $image_path = str_replace(basename($image_path), $metadata['sizes'][$size]['file'], $image_path);
         }
-        
+
         if (file_exists($image_path)) {
             header('Content-Description: File Transfer');
             header('Content-Type: application/octet-stream');
@@ -400,8 +382,6 @@ function axon_download_image() {
 }
 add_action('wp_ajax_axon_download_image', 'axon_download_image');
 add_action('wp_ajax_nopriv_axon_download_image', 'axon_download_image');
-
-
 
 function axon_create_user() {
     check_ajax_referer('axon_create_user_nonce', 'security');
@@ -418,7 +398,7 @@ function axon_create_user() {
 
     $random_password = wp_generate_password();
     $user_id = wp_create_user($email, $random_password, $email);
-    
+
     if (is_wp_error($user_id)) {
         wp_send_json_error(['message' => 'Could not create user.']);
     }
@@ -429,6 +409,7 @@ function axon_create_user() {
     wp_send_json_success(['user_id' => $user->ID, 'user_name' => $user->display_name]);
 }
 add_action('wp_ajax_axon_create_user', 'axon_create_user');
+
 function axon_display_gallery_on_post($content) {
     if (is_singular('photo_gallery')) {
         global $post;
@@ -441,18 +422,16 @@ add_filter('the_content', 'axon_display_gallery_on_post');
 
 function gallery_image_select3() {
     global $post;
-    $product = wc_get_product( $post->ID );
+    $product = wc_get_product($post->ID);
     $product_type = $product->get_type();
     if (is_product() && $product_type != "package") {
         $user_id = get_current_user_id();
 
-        // Get the gallery settings from product meta
         $gallery_option = get_post_meta($post->ID, '_gallery_option', true);
         $max_images = get_post_meta($post->ID, '_max_images', true);
 
-        // If the gallery is set to "Don't Show"
         if (empty($gallery_option) || $gallery_option === 'dont_show') {
-            return; // Do not display the gallery
+            return;
         }
 
         $args = array(
@@ -460,7 +439,7 @@ function gallery_image_select3() {
             'posts_per_page' => -1,
             'post_status' => 'publish',
         );
-        
+
         $photo_gallery_query = new WP_Query($args);
 
         echo '<div id="gallery-modal" style="display:none;">
@@ -470,10 +449,10 @@ function gallery_image_select3() {
             while ($photo_gallery_query->have_posts()) {
                 $photo_gallery_query->the_post();
                 $post_title = get_the_title();
-        
+
                 $allowed_users = get_post_meta(get_the_ID(), 'axon_allowed_users', true) ?: [];
                 if (in_array($user_id, $allowed_users)) {
-                    $image_ids[] = [ 
+                    $image_ids[] = [
                         "title" => $post_title,
                         "image_ids" => get_post_meta(get_the_ID(), 'axon_gallery_images', true)
                     ];
@@ -494,79 +473,40 @@ function gallery_image_select3() {
                     echo '</div>';
                 }
             }
-            
-        
-            echo'<button id="close-modal">Done</button>';
-        }else{
+
+            echo '<button id="close-modal">Done</button>';
+        } else {
             echo '<p>No galleries available login to see your allowed galleries for selection.</p>';
         }
         echo '</div></div>';
-        echo '<div class="image-selection-container"  data-product="'.$post->ID.'">
-            <input type="hidden" class="selected-image-ids" data-galleryoption="' . esc_attr($gallery_option) . '" data-max_images="' . esc_attr($max_images) . '"name="selected_image_ids[]" value="">
+        echo '<div class="image-selection-container" data-product="' . $post->ID . '">
+            <input type="hidden" class="selected-image-ids" data-galleryoption="' . esc_attr($gallery_option) . '" data-max_images="' . esc_attr($max_images) . '" name="selected_image_ids[]" value="">
             <div class="selected-images-container"></div>
             <button class="view-gallery-btn" type="button">Select Photos (0)</button>
         </div>';
 
+        echo '<div id="editor-modal" class="modal fade" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 10000;">
+            <div class="modal-dialog modal-lg" style="position: relative; margin: 50px auto; max-width: 800px; background: #fff; padding: 20px;">
+                <div class="modal-content" style="width:auto;">
+                    <div class="modal-header" style="padding: 10px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between;">
+                        <h5 style="margin: 0; font-size: 18px;">Image Editor</h5>
+                        <button id="close-editor-modal" class="close" style="background: none; border: none; font-size: 24px; cursor: pointer;">×</button>
+                    </div>
+                    <div class="modal-body" style="padding: 20px;">
+                        <div id="tui-image-editor" style="width: 95vw; height: 500px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>';
 
-        echo '<div id="editor-modal" class="modal fade" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 10000;">';
-        echo '    <div class="modal-dialog modal-lg" style="position: relative; margin: 50px auto; max-width: 800px; background: #fff; padding: 20px;">';
-        echo '        <div class="modal-content" style="width:auto;">';
-        echo '            <div class="modal-header" style="padding: 10px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between;">';
-        echo '                <h5 style="margin: 0; font-size: 18px;">Image Editor</h5>';
-        echo '                <button id="close-editor-modal" class="close" style="background: none; border: none; font-size: 24px; cursor: pointer;">×</button>';
-        echo '            </div>';
-        echo '            <div class="modal-body" style="padding: 20px;">';
-        echo '                <div id="tui-image-editor" style="width: 95vw; height: 500px;"></div>'; // Editor container
-        echo '            </div>';
-        echo '        </div>';
-        echo '    </div>';
+        // Add composite image preview
+        echo '<div class="product-composite-preview-container">';
+        echo '<img id="product-composite-preview" src="" style="max-width: 100%; height: auto; display: none;" />';
         echo '</div>';
-
-
     }
 }
-
-// Add necessary CSS and JavaScript
-add_action('wp_footer', function() {
-    // echo '<script defer src="https://chat-widget-matlil.s3.eu-west-3.amazonaws.com/insert.js?organization_id=5&chatbot_id=3284263b-e62c-46c1-8045-69ec4ae6f215" id="matil-chat-widget"></script>';
-    echo '<script>
-        document.addEventListener("DOMContentLoaded", function() {
-            const images = document.querySelectorAll(".zoomable-image");
-            const alightbox = document.createElement("div");
-            alightbox.classList.add("alightbox");
-            document.body.appendChild(alightbox);
-            
-            const img = document.createElement("img");
-            alightbox.appendChild(img);
-            
-            const close = document.createElement("span");
-            close.innerHTML = "&times;";
-            close.classList.add("alightbox-close");
-            alightbox.appendChild(close);
-            
-            images.forEach(image => {
-                image.addEventListener("click", function() {
-                    img.src = this.src;
-                    alightbox.style.display = "flex";
-                });
-            });
-            
-            close.addEventListener("click", function() {
-                alightbox.style.display = "none";
-            });
-            // Close the modal if the user clicks outside of the modal content
-            window.addEventListener("click", function(event) {
-                if (event.target === alightbox) {
-                    alightbox.style.display = "none";
-                }
-            });
-
-
-        });
-    </script>';
-});
-
 add_filter('woocommerce_before_add_to_cart_form', 'gallery_image_select3');
+
 function hide_quantity() {
     global $post;
     $gallery_option = get_post_meta($post->ID, '_gallery_option', true);
@@ -578,31 +518,25 @@ function hide_quantity() {
             jQuery('#gallery-modal input').on('change', function() {
                 if (jQuery(this).prop('checked')) {
                     jQuery('div[data-block-name="woocommerce/add-to-cart-form"] .quantity').val(jQuery('div[data-block-name="woocommerce/add-to-cart-form"] .quantity').val()+1);
-                }else{
+                } else {
                     jQuery('div[data-block-name="woocommerce/add-to-cart-form"] .quantity').val(jQuery('div[data-block-name="woocommerce/add-to-cart-form"] .quantity').val()-1);
                 }
                 console.log("changes in normal single");
             });
         </script>
         <?php
-    
     }
 }
-
 add_action('woocommerce_after_add_to_cart_quantity', 'hide_quantity');
 
-function custom_woocommerce_quantity_input_args( $args, $product ) {
-    // Set the 'input_value' to 'readonly' to make the field non-editable
-    // print_r($product->get_id());
+function custom_woocommerce_quantity_input_args($args, $product) {
     $gallery_option = get_post_meta($product->get_id(), '_gallery_option', true);
     if (!empty($gallery_option) && $gallery_option === 'single_image') {
-        $args['readonly'] = true; // This will set the max_value to the min_value, making it unchangeable
-        // $args['min_value'] = 0; // This will set the max_value to the min_value, making it unchangeable
-        // $args['input_value'] = 0; // This will set the max_value to the min_value, making it unchangeable
+        $args['readonly'] = true;
         ?>
         <script>
             jQuery(document).ready(function($) {
-                $(document).on('singleQtyChange', function(e , count) {
+                $(document).on('singleQtyChange', function(e, count) {
                     $("#<?php echo $args['input_id'];?>").val(count);
                     console.log("changes in normal single changed");
                 });
@@ -613,22 +547,18 @@ function custom_woocommerce_quantity_input_args( $args, $product ) {
         </script>
         <?php
     }
-    // print_r($args);
-    // die();
-    
     return $args;
 }
-add_filter( 'woocommerce_quantity_input_args', 'custom_woocommerce_quantity_input_args', 10, 2 );
-
+add_filter('woocommerce_quantity_input_args', 'custom_woocommerce_quantity_input_args', 10, 2);
 
 function add_gallery_metabox() {
     add_meta_box(
-        'gallery_metabox',           // ID
-        'Gallery Settings',          // Title
-        'gallery_metabox_callback',  // Callback function
-        'product',                   // Post type
-        'side',                      // Context (location on the page)
-        'high'                       // Priority
+        'gallery_metabox',
+        'Gallery Settings',
+        'gallery_metabox_callback',
+        'product',
+        'side',
+        'high'
     );
 }
 add_action('add_meta_boxes', 'add_gallery_metabox');
@@ -636,7 +566,7 @@ add_action('add_meta_boxes', 'add_gallery_metabox');
 function gallery_metabox_callback($post) {
     $gallery_option = get_post_meta($post->ID, '_gallery_option', true);
     $max_images = get_post_meta($post->ID, '_max_images', true);
-    
+
     ?>
     <label for="gallery_option">Gallery Option:</label>
     <select name="gallery_option" id="gallery_option">
@@ -665,36 +595,21 @@ function gallery_metabox_callback($post) {
 
 function save_gallery_metabox_data($post_id) {
     if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
-    
-    if (isset($_POST['gallery_option'])) {
-        update_post_meta($post_id, '_gallery_option', sanitize_text_field($_POST['gallery_option']));
-    }
 
-    if (isset($_POST['max_images']) ) {
-        if($_POST['gallery_option']=="single_image") $_POST['max_images']=-1;
-        update_post_meta($post_id, '_max_images', $_POST['max_images']);
-    }
-}
-add_action('save_post', 'save_gallery_metabox_data2');
-function save_gallery_metabox_data2($post_id) {
-    if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
-    
     if (isset($_POST['gallery_option'])) {
         update_post_meta($post_id, '_gallery_option', sanitize_text_field($_POST['gallery_option']));
     }
 
     if (isset($_POST['max_images'])) {
-        if($_POST['gallery_option'] == "single_image") {
+        if ($_POST['gallery_option'] == "single_image") {
             $_POST['max_images'] = -1;
         }
         update_post_meta($post_id, '_max_images', intval($_POST['max_images']));
     }
 
-    // Check if this is a variable product
     if ('product' === get_post_type($post_id)) {
         $product = wc_get_product($post_id);
         if ($product->is_type('variable')) {
-            // Loop through variations
             $variations = $product->get_children();
             foreach ($variations as $variation_id) {
                 if (isset($_POST['gallery_option'])) {
@@ -707,16 +622,15 @@ function save_gallery_metabox_data2($post_id) {
         }
     }
 }
+add_action('save_post', 'save_gallery_metabox_data');
+
 function save_selected_gallery_images_in_cart($cart_item_data, $product_id) {
     if (isset($_POST['selected_gallery_images'])) {
         $selected_images = json_decode(stripslashes($_POST['selected_gallery_images']), true);
         if (!empty($selected_images)) {
-            // Save the selected images as custom cart item data
             $cart_item_data['selected_gallery_images'] = $selected_images;
         }
     }
-    // print_r($cart_item_data);
-    // exit;
     return $cart_item_data;
 }
 add_filter('woocommerce_add_cart_item_data', 'save_selected_gallery_images_in_cart', 10, 2);
@@ -725,8 +639,8 @@ function save_selected_gallery_images_in_order_meta($item, $cart_item_key, $valu
     $cart_item = $values;
     if (isset($cart_item['selected_gallery_images'])) {
         $selected_images = $cart_item['selected_gallery_images'];
-        $data = "";        
-        if($cart_item["data"]->get_type() == "package"){
+        $data = "";
+        if ($cart_item["data"]->get_type() == "package") {
             $package_products = $cart_item["data"]->get_meta("_package_products");
             $data .= "<br>";
             $data .= '<ol class="package-products-list" style="margin-left: 1em; padding:0;width: 100%; float: left;">';
@@ -734,22 +648,21 @@ function save_selected_gallery_images_in_order_meta($item, $cart_item_key, $valu
                 $product_id = $product['product'];
                 $quantity = $product['quantity'];
                 $product_obj = wc_get_product($product_id);
-                
+
                 if ($product_obj) {
                     $product_thumbnail = $product_obj->get_image();
                     $product_title = $product_obj->get_title();
-                    $product_price = wc_price($product_obj->get_price()*(int)$quantity);
-                    
+                    $product_price = wc_price($product_obj->get_price() * (int)$quantity);
+
                     $data .= '<li class="package-product-item" style="text-align: left;">';
                     $data .= '<span class="product-title">' . $product_title . '</span>';
                     $data .= '<span class="product-quantity"> x ' . $quantity . '</span>';
                     $data .= '<span class="product-price"> - ' . $product_price . '</span><ul style="margin: 0; padding: 0;list-style: none !important;" type="none">';
                     foreach ($selected_images[$product_id] as $group) {
-                        // $data .= "<li style='padding: 2px 0; border: 1px solid black;border-width: 0 0 1px;padding-bottom: 4px;'type='none'><div class='cart-images' style='display: flex; flex-wrap: wrap; justify-content: flex-start; 	gap: 5px;width: 100%;'>";
-                        $data .= "<li style='padding: 2px 0;' type='none'><div class='cart-images' style='display: flex; flex-wrap: wrap; justify-content: flex-start; 	gap: 5px;width: 100%;'>";
+                        $data .= "<li style='padding: 2px 0;' type='none'><div class='cart-images' style='display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 5px;width: 100%;'>";
                         foreach ($group as $image_id) {
                             $image_url = wp_get_attachment_image_src($image_id, 'thumbnail')[0];
-                            $data .= '<img src="'.esc_url($image_url).'" alt="Selected Image" style="width: 70px; height: 70px; object-fit: cover;" />';
+                            $data .= '<img src="' . esc_url($image_url) . '" alt="Selected Image" style="width: 70px; height: 70px; object-fit: cover;" />';
                         }
                         $data .= "</div></li>";
                     }
@@ -757,59 +670,47 @@ function save_selected_gallery_images_in_order_meta($item, $cart_item_key, $valu
                 }
             }
             $data .= '</ol>';
-        }else{
+        } else {
             foreach ($selected_images[$cart_item["product_id"]] as $group) {
                 $data .= "<div class='cart-images' style='display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 5px;width: 100%;float: left;'>";
                 foreach ($group as $image_id) {
                     $image_url = wp_get_attachment_image_src($image_id, 'thumbnail')[0];
-                    $data .= '<img src="'.esc_url($image_url).'" alt="Selected Image" style="width: 70px; height: 70px; object-fit: cover;" />';
+                    $data .= '<img src="' . esc_url($image_url) . '" alt="Selected Image" style="width: 70px; height: 70px; object-fit: cover;" />';
                 }
                 $data .= "</div>";
             }
         }
-        $item->add_meta_data(
-            'Selected Images ',
-            $data,
-            true
-        );
-        
+        $item->add_meta_data('Selected Images', $data, true);
     }
 }
 add_action('woocommerce_checkout_create_order_line_item', 'save_selected_gallery_images_in_order_meta', 10, 4);
 
 function display_selected_gallery_images_on_cart($item_data, $cart_item) {
-    // Check if selected gallery images exist in the cart item data
-    // print_r($cart_item);
-        // print_r($cart_item["product_id"]);
-        // print_r($cart_item["data"]->get_type());
-        // print_r($cart_item["data"]->get_meta("_package_products"));
-    // die();
     $cart_item = $cart_item;
     if (isset($cart_item['selected_gallery_images'])) {
         $selected_images = $cart_item['selected_gallery_images'];
-        if($cart_item["data"]->get_type() == "package"){
+        if ($cart_item["data"]->get_type() == "package") {
             $package_products = $cart_item["data"]->get_meta("_package_products");
             echo '<ol class="package-products-list" style="margin-left: 1em; padding:0;width: 100%;float: left;">';
             foreach ($package_products as $index => $product) {
                 $product_id = $product['product'];
                 $quantity = $product['quantity'];
                 $product_obj = wc_get_product($product_id);
-                
+
                 if ($product_obj) {
                     $product_thumbnail = $product_obj->get_image();
                     $product_title = $product_obj->get_title();
-                    $product_price = wc_price($product_obj->get_price()*(int)$quantity);
-                    
+                    $product_price = wc_price($product_obj->get_price() * (int)$quantity);
+
                     echo '<li class="package-product-item" style="text-align: left;">';
                     echo '<span class="product-title">' . $product_title . '</span>';
                     echo '<span class="product-quantity"> x ' . $quantity . '</span>';
                     echo '<span class="product-price"> - ' . $product_price . '</span><ul style="margin: 0; padding: 0;" type="none">';
                     foreach ($selected_images[$product_id] as $group) {
-                        // echo "<li style='padding: 2px 0; border: 1px solid black;border-width: 0 0 1px;padding-bottom: 4px;' type='none'><div class='cart-images' style='display: flex; flex-wrap: wrap; justify-content: flex-start; 	gap: 5px;width: 100%;'>";
-                        echo "<li style='padding: 2px 0;' type='none'><div class='cart-images' style='display: flex; flex-wrap: wrap; justify-content: flex-start; 	gap: 5px;width: 100%;'>";
+                        echo "<li style='padding: 2px 0;' type='none'><div class='cart-images' style='display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 5px;width: 100%;'>";
                         foreach ($group as $image_id) {
                             $image_url = wp_get_attachment_image_src($image_id, 'thumbnail')[0];
-                            echo '<img src="'.esc_url($image_url).'" alt="Selected Image" style="width: 70px; height: 70px; object-fit: cover;" />';
+                            echo '<img src="' . esc_url($image_url) . '" alt="Selected Image" style="width: 70px; height: 70px; object-fit: cover;" />';
                         }
                         echo "</div></li>";
                     }
@@ -817,20 +718,20 @@ function display_selected_gallery_images_on_cart($item_data, $cart_item) {
                 }
             }
             echo '</ol>';
-        }else{
+        } else {
             $value = "";
             foreach ($selected_images[$cart_item["product_id"]] as $group) {
                 $value .= "<div class='cart-images' style='display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 5px;width: 100%;float: left;'>";
                 foreach ($group as $image_id) {
                     $image_url = wp_get_attachment_image_src($image_id, 'thumbnail')[0];
-                    $value .= '<img src="'.esc_url($image_url).'" alt="Selected Image" style="width: 70px; height: 70px; object-fit: cover;" />';
+                    $value .= '<img src="' . esc_url($image_url) . '" alt="Selected Image" style="width: 70px; height: 70px; object-fit: cover;" />';
                 }
                 $value .= "</div>";
             }
             $item_data[] = array(
-                'key'   => 'Selected Image ',
+                'key'   => 'Selected Image',
                 'value' => $value,
-                'display' => '', 
+                'display' => '',
             );
         }
     }
@@ -838,23 +739,17 @@ function display_selected_gallery_images_on_cart($item_data, $cart_item) {
 }
 add_filter('woocommerce_get_item_data', 'display_selected_gallery_images_on_cart', 10, 2);
 
-
-function check_selected_images_add_to_cart_validation( $passed, $product_id, $quantity, $variation_id=null ) {
+function check_selected_images_add_to_cart_validation($passed, $product_id, $quantity, $variation_id = null) {
     $gallery_option = get_post_meta($product_id, '_gallery_option', true);
-    $product = wc_get_product( $product_id );
+    $product = wc_get_product($product_id);
     $product_type = $product->get_type();
     $_POST['selected_gallery_images'] = stripslashes($_POST['selected_gallery_images']);
-    if($product_type == "package"){
-        
-        // $passed = false;
-        // print_r($_POST['selected_gallery_images']);
-        // die();
-        // wc_add_notice(print_r(json_decode($_POST['selected_gallery_images']),true), 'error' );
-        foreach(json_decode($_POST['selected_gallery_images']) as $images) {
-            foreach($images as $sets) {
-                if(is_array($sets) && empty($sets)){
+    if ($product_type == "package") {
+        foreach (json_decode($_POST['selected_gallery_images']) as $images) {
+            foreach ($images as $sets) {
+                if (is_array($sets) && empty($sets)) {
                     $passed = false;
-                    wc_add_notice('All Galleries Should Have Atleast 1 Images Selected.', 'error' );
+                    wc_add_notice('All Galleries Should Have Atleast 1 Images Selected.', 'error');
                     break 2;
                 }
             }
@@ -863,74 +758,60 @@ function check_selected_images_add_to_cart_validation( $passed, $product_id, $qu
     if (empty($gallery_option) || $gallery_option === 'dont_show') {
         return $passed;
     }
-    foreach(json_decode($_POST['selected_gallery_images']) as $images) {
-        foreach($images as $sets) {
-            if(is_array($sets) && empty($sets)){
+    foreach (json_decode($_POST['selected_gallery_images']) as $images) {
+        foreach ($images as $sets) {
+            if (is_array($sets) && empty($sets)) {
                 $passed = false;
-                wc_add_notice('Atleast 1 Images is required to be selected.', 'error' );
+                wc_add_notice('Atleast 1 Images is required to be selected.', 'error');
                 break 2;
             }
         }
     }
     return $passed;
 }
-add_filter( 'woocommerce_add_to_cart_validation', 'check_selected_images_add_to_cart_validation', 10, 4 );
- 
-  
+add_filter('woocommerce_add_to_cart_validation', 'check_selected_images_add_to_cart_validation', 10, 4);
 
-
-// Register custom product type 'package'
 function register_package_product_type() {
     #[AllowDynamicProperties]
     class WC_Product_Package extends WC_Product {
-        
-        public function __construct( $product ) {
+        public function __construct($product) {
             $this->product_type = 'package';
-            parent::__construct( $product );
+            parent::__construct($product);
         }
         public function get_type() {
             return 'package';
-         }
+        }
     }
 }
-add_action( 'init', 'register_package_product_type' );
-// Add custom product type 'package' to the product type dropdown
-function add_package_product_type( $types ) {
+function add_package_product_type($types) {
     $types['package'] = 'Package';
     return $types;
 }
-add_filter( 'product_type_selector', 'add_package_product_type' );
-add_filter( 'woocommerce_product_class', 'bbloomer_woocommerce_product_class', 10, 2 );
-  
-function bbloomer_woocommerce_product_class( $classname, $product_type ) {
-    if ( $product_type == 'package' ) {
+add_filter('product_type_selector', 'add_package_product_type');
+add_filter('woocommerce_product_class', 'bbloomer_woocommerce_product_class', 10, 2);
+
+function bbloomer_woocommerce_product_class($classname, $product_type) {
+    if ($product_type == 'package') {
         $classname = 'WC_Product_Package';
     }
     return $classname;
 }
 
-
-// Add custom tab for Package product type
-function add_package_product_data_tab( $tabs ) {
+function add_package_product_data_tab($tabs) {
     $tabs['package_settings'] = array(
-        'label'    => __( 'Package Settings', 'woocommerce' ),
+        'label'    => __('Package Settings', 'woocommerce'),
         'target'   => 'package_settings_product_data',
-        'class'    => array( 'show_if_package' ),
+        'class'    => array('show_if_package'),
         'priority' => 21,
     );
-    
-    // $tabs['inventory']['class'][] = 'hide_if_package';
-    // $tabs['shipping']['class'][] = 'hide_if_package';
+
     $tabs['linked_product']['class'][] = 'hide_if_package';
     $tabs['attribute']['class'][] = 'hide_if_package';
     $tabs['advanced']['class'][] = 'hide_if_package';
-   return $tabs;
+    return $tabs;
 }
-add_filter( 'woocommerce_product_data_tabs', 'add_package_product_data_tab' ,10,1);
+add_filter('woocommerce_product_data_tabs', 'add_package_product_data_tab', 10, 1);
 
-
-
-// Step 1: Add package fields in the product settings panel (with repeater for selecting products)
 function add_package_product_data_panel() {
     global $post;
 
@@ -940,7 +821,6 @@ function add_package_product_data_panel() {
             <h3><?php _e('Package Products', 'woocommerce'); ?></h3>
             <div id="product-package-repeater" class="product-package-repeater">
                 <?php
-                // Get existing package data (if any)
                 $package_products = get_post_meta($post->ID, '_package_products', true);
                 $products = wc_get_products(array(
                     'status' => 'publish',
@@ -950,11 +830,7 @@ function add_package_product_data_panel() {
                 $products = array_filter($products, function($product) {
                     return !$product->is_type('variable');
                 });
-                
-                // Optionally, reset the keys of the filtered array
                 $products = array_values($products);
-                
-                
 
                 if (!empty($package_products)) {
                     foreach ($package_products as $key => $product) {
@@ -993,7 +869,6 @@ function add_package_product_data_panel() {
         jQuery(document).ready(function ($) {
             let packageIndex = <?php echo !empty($package_products) ? count($package_products) : 0; ?>;
 
-            // Add new package item
             $('#add-package-product').on('click', function (e) {
                 e.preventDefault();
 
@@ -1023,7 +898,6 @@ function add_package_product_data_panel() {
                 packageIndex++;
             });
 
-            // Remove package item
             $(document).on('click', '#package_settings_product_data .del-btn', function (e) {
                 e.preventDefault();
                 $(this).closest('.package-product').remove();
@@ -1031,23 +905,21 @@ function add_package_product_data_panel() {
             $(document.body).on('woocommerce-product-type-change',function(event,type){
                 if (type=='package') {
                     $('.general_tab').show();
-                    $('.pricing').show();         
+                    $('.pricing').show();
                 }
-            });  
+            });
         });
     </script>
     <?php
     global $product_object;
-    if ( $product_object && 'package' === $product_object->get_type() ) {
+    if ($product_object && 'package' === $product_object->get_type()) {
         wc_enqueue_js("
             $('.general_tab').show();
-            $('.pricing').show();         
+            $('.pricing').show();
         ");
     }
 }
 add_action('woocommerce_product_data_panels', 'add_package_product_data_panel');
-
-
 
 function save_package_product_data($post_id) {
     if (isset($_POST['_package_product']) && is_array($_POST['_package_product'])) {
@@ -1062,7 +934,6 @@ function save_package_product_data($post_id) {
             }
         }
 
-        // Save package data
         update_post_meta($post_id, '_package_products', $package_products);
     } else {
         delete_post_meta($post_id, '_package_products');
@@ -1070,13 +941,9 @@ function save_package_product_data($post_id) {
 }
 add_action('woocommerce_process_product_meta', 'save_package_product_data');
 
-
-
-// Step 3: Display the package content in the product summary (frontend)
 function display_package_product_summary() {
     global $post;
-    // Get the saved package products and quantities
-    $package_products = get_post_meta( $post->ID, '_package_products', true );
+    $package_products = get_post_meta($post->ID, '_package_products', true);
     $user_id = get_current_user_id();
     if ($package_products) {
         $args = array(
@@ -1084,9 +951,9 @@ function display_package_product_summary() {
             'posts_per_page' => -1,
             'post_status' => 'publish',
         );
-        
+
         $photo_gallery_query = new WP_Query($args);
-    
+
         echo '<div id="gallery-modal" style="display:none;">
         <div id="modal-content">';
         $image_ids = [];
@@ -1094,10 +961,10 @@ function display_package_product_summary() {
             while ($photo_gallery_query->have_posts()) {
                 $photo_gallery_query->the_post();
                 $post_title = get_the_title();
-        
+
                 $allowed_users = get_post_meta(get_the_ID(), 'axon_allowed_users', true) ?: [];
                 if (in_array($user_id, $allowed_users)) {
-                    $image_ids[] = [ 
+                    $image_ids[] = [
                         "title" => $post_title,
                         "image_ids" => get_post_meta(get_the_ID(), 'axon_gallery_images', true)
                     ];
@@ -1118,9 +985,9 @@ function display_package_product_summary() {
                     echo '</div>';
                 }
             }
-        
-            echo'<button id="close-modal">Done</button>';
-        }else{
+
+            echo '<button id="close-modal">Done</button>';
+        } else {
             echo '<p>No galleries available login to see your allowed galleries for selection.</p>';
         }
         echo '</div></div>';
@@ -1134,7 +1001,7 @@ function display_package_product_summary() {
             $product_obj = wc_get_product($product_id);
             $gallery_option = get_post_meta($product_id, '_gallery_option', true);
             $max_images = get_post_meta($product_id, '_max_images', true);
-            
+
             if ($product_obj) {
                 $product_thumbnail = $product_obj->get_image();
                 $product_title = $product_obj->get_title();
@@ -1143,28 +1010,28 @@ function display_package_product_summary() {
                 echo '<li class="package-product-item">';
                 echo '<div class="product-thumbnail">' . $product_thumbnail . '</div>';
                 echo '<div class="product-info">';
-                    echo '<span class="product-title">' . $product_title . '</span>';
-                    echo '<span class="product-quantity"> x ' . $quantity . '</span>';
-                    echo '<span class="product-price"> - ' . $product_price . '</span>';
-                    if (empty($gallery_option) || $gallery_option == 'dont_show') {
-                        // echo 'It is a dont show';
-                    }
-                    if ($gallery_option == 'multiple_images') {
-                        for ($i=1; $i <= $quantity ; $i++) {
-                            echo '<div class="image-selection-container" data-product="'.$product_id.'">
-                                <input type="hidden" class="selected-image-ids" data-galleryoption="' . esc_attr($gallery_option) . '" data-max_images="' . esc_attr($max_images) . '" name="selected_image_ids[]" value="">
-                                <div class="selected-images-container"></div>
-                                <button class="view-gallery-btn" type="button">Select Photos (0)</button>
-                            </div>';
-                        }
-                    }
-                    if ($gallery_option == 'single_image') {
-                        echo '<div class="image-selection-container" data-product="'.$product_id.'">
-                            <input type="hidden" class="selected-image-ids" data-galleryoption="' . esc_attr($gallery_option) . '" data-max_images="' . esc_attr($quantity) . '" name="selected_image_ids[]" value="">
+                echo '<span class="product-title">' . $product_title . '</span>';
+                echo '<span class="product-quantity"> x ' . $quantity . '</span>';
+                echo '<span class="product-price"> - ' . $product_price . '</span>';
+                if (empty($gallery_option) || $gallery_option == 'dont_show') {
+                    // echo 'It is a dont show';
+                }
+                if ($gallery_option == 'multiple_images') {
+                    for ($i = 1; $i <= $quantity; $i++) {
+                        echo '<div class="image-selection-container" data-product="' . $product_id . '">
+                            <input type="hidden" class="selected-image-ids" data-galleryoption="' . esc_attr($gallery_option) . '" data-max_images="' . esc_attr($max_images) . '" name="selected_image_ids[]" value="">
                             <div class="selected-images-container"></div>
                             <button class="view-gallery-btn" type="button">Select Photos (0)</button>
                         </div>';
                     }
+                }
+                if ($gallery_option == 'single_image') {
+                    echo '<div class="image-selection-container" data-product="' . $product_id . '">
+                        <input type="hidden" class="selected-image-ids" data-galleryoption="' . esc_attr($gallery_option) . '" data-max_images="' . esc_attr($quantity) . '" name="selected_image_ids[]" value="">
+                        <div class="selected-images-container"></div>
+                        <button class="view-gallery-btn" type="button">Select Photos (0)</button>
+                    </div>';
+                }
                 echo '</div>';
                 echo '</li>';
             }
@@ -1173,69 +1040,63 @@ function display_package_product_summary() {
         echo '</ul>';
         echo '</div>';
 
-        echo '<div id="editor-modal" class="modal fade" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 10000;">';
-        echo '    <div class="modal-dialog modal-lg" style="position: relative; margin: 50px auto; max-width: 800px; background: #fff; padding: 20px;">';
-        echo '        <div class="modal-content" style="width:auto;">';
-        echo '            <div class="modal-header" style="padding: 10px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between;">';
-        echo '                <h5 style="margin: 0; font-size: 18px;">Image Editor</h5>';
-        echo '                <button id="close-editor-modal" class="close" style="background: none; border: none; font-size: 24px; cursor: pointer;">×</button>';
-        echo '            </div>';
-        echo '            <div class="modal-body" style="padding: 20px;">';
-        echo '                <div id="tui-image-editor" style="width: 95vw; height: 500px;"></div>'; // Editor container
-        echo '            </div>';
-        echo '        </div>';
-        echo '    </div>';
-        echo '</div>';
+        echo '<div id="editor-modal" class="modal fade" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 10000;">
+            <div class="modal-dialog modal-lg" style="position: relative; margin: 50px auto; max-width: 800px; background: #fff; padding: 20px;">
+                <div class="modal-content" style="width:auto;">
+                    <div class="modal-header" style="padding: 10px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between;">
+                        <h5 style="margin: 0; font-size: 18px;">Image Editor</h5>
+                        <button id="close-editor-modal" class="close" style="background: none; border: none; font-size: 24px; cursor: pointer;">×</button>
+                    </div>
+                    <div class="modal-body" style="padding: 20px;">
+                        <div id="tui-image-editor" style="width: 95vw; height: 500px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>';
 
         global $product;
-        if ( ! $product->is_purchasable() ) {
+        if (!$product->is_purchasable()) {
             return;
         }
-        
-        echo wc_get_stock_html( $product );
 
-        if ( $product->is_in_stock() ) : ?>
+        echo wc_get_stock_html($product);
 
-            <?php do_action( 'woocommerce_before_add_to_cart_form' ); ?>
+        if ($product->is_in_stock()) : ?>
 
-            <form class="cart" action="<?php echo esc_url( apply_filters( 'woocommerce_add_to_cart_form_action', $product->get_permalink() ) ); ?>" method="post" enctype='multipart/form-data'>
-                <?php do_action( 'woocommerce_before_add_to_cart_button' ); ?>
+            <?php do_action('woocommerce_before_add_to_cart_form'); ?>
+
+            <form class="cart" action="<?php echo esc_url(apply_filters('woocommerce_add_to_cart_form_action', $product->get_permalink())); ?>" method="post" enctype='multipart/form-data'>
+                <?php do_action('woocommerce_before_add_to_cart_button'); ?>
 
                 <?php
-                do_action( 'woocommerce_before_add_to_cart_quantity' );
+                do_action('woocommerce_before_add_to_cart_quantity');
 
                 woocommerce_quantity_input(
                     array(
-                        'min_value'   => apply_filters( 'woocommerce_quantity_input_min', $product->get_min_purchase_quantity(), $product ),
-                        'max_value'   => apply_filters( 'woocommerce_quantity_input_max', $product->get_max_purchase_quantity(), $product ),
-                        'input_value' => isset( $_POST['quantity'] ) ? wc_stock_amount( wp_unslash( $_POST['quantity'] ) ) : $product->get_min_purchase_quantity(), // WPCS: CSRF ok, input var ok.
+                        'min_value'   => apply_filters('woocommerce_quantity_input_min', $product->get_min_purchase_quantity(), $product),
+                        'max_value'   => apply_filters('woocommerce_quantity_input_max', $product->get_max_purchase_quantity(), $product),
+                        'input_value' => isset($_POST['quantity']) ? wc_stock_amount(wp_unslash($_POST['quantity'])) : $product->get_min_purchase_quantity(),
                     )
                 );
 
-                do_action( 'woocommerce_after_add_to_cart_quantity' );
+                do_action('woocommerce_after_add_to_cart_quantity');
                 ?>
 
-                <button type="submit" name="add-to-cart" value="<?php echo esc_attr( $product->get_id() ); ?>" class="single_add_to_cart_button button alt<?php echo esc_attr( wc_wp_theme_get_element_class_name( 'button' ) ? ' ' . wc_wp_theme_get_element_class_name( 'button' ) : '' ); ?>"><?php echo esc_html( $product->single_add_to_cart_text() ); ?></button>
+                <button type="submit" name="add-to-cart" value="<?php echo esc_attr($product->get_id()); ?>" class="single_add_to_cart_button button alt<?php echo esc_attr(wc_wp_theme_get_element_class_name('button') ? ' ' . wc_wp_theme_get_element_class_name('button') : ''); ?>"><?php echo esc_html($product->single_add_to_cart_text()); ?></button>
 
-                <?php do_action( 'woocommerce_after_add_to_cart_button' ); ?>
+                <?php do_action('woocommerce_after_add_to_cart_button'); ?>
             </form>
 
-            <?php do_action( 'woocommerce_after_add_to_cart_form' ); ?>
+            <?php do_action('woocommerce_after_add_to_cart_form'); ?>
 
         <?php endif;
     }
 }
-add_action( 'woocommerce_single_product_summary', 'display_package_product_summary', 25 );
-
-
+add_action('woocommerce_single_product_summary', 'display_package_product_summary', 25);
 
 function add_watermark_to_image($image_url, $attachment_id) {
     return $image_url;
 }
-//! Hook into the 'wp_get_attachment_url' filter
-// add_filter('wp_get_attachment_url', 'add_watermark_to_image', 10, 2);
-
-
 
 function custom_woocommerce_button_text($text, $product) {
     if ((is_shop() || is_product_category()) && $product->get_type() === 'package') {
@@ -1249,107 +1110,63 @@ function custom_woocommerce_button_text($text, $product) {
 }
 add_filter('woocommerce_product_add_to_cart_text', 'custom_woocommerce_button_text', 10, 2);
 
-
 function custom_woocommerce_add_to_cart_redirect($url, $product) {
     if ((is_shop() || is_product_category()) && $product->get_type() === 'package') {
-        return get_permalink($product->get_id()); // Redirect to the product page
+        return get_permalink($product->get_id());
     }
 
     if (get_post_meta($product->get_id(), '_gallery_option', true) == 'single_image' || get_post_meta($product->get_id(), '_gallery_option', true) == 'multiple_images') {
-        return get_permalink($product->get_id()); // Redirect to the product page
+        return get_permalink($product->get_id());
     }
 
     return $url;
 }
 add_filter('woocommerce_product_add_to_cart_url', 'custom_woocommerce_add_to_cart_redirect', 10, 2);
+
 function custom_woocommerce_loop_add_to_cart_args($args, $product) {
-    // Condition for shop or product category page and product type 'package'
     if ((is_shop() || is_product_category()) && $product->get_type() === 'package') {
         $args['class'] = str_replace('ajax_add_to_cart', "", $args['class']);
     }
     if (get_post_meta($product->get_id(), '_gallery_option', true) == 'single_image' || get_post_meta($product->get_id(), '_gallery_option', true) == 'multiple_images') {
         $args['class'] = str_replace('ajax_add_to_cart', "", $args['class']);
     }
-    // print_r($args);
-
     return $args;
 }
 add_filter('woocommerce_loop_add_to_cart_args', 'custom_woocommerce_loop_add_to_cart_args', 10, 2);
 
-
-
-
-
-
-// Step 1: Add a custom menu item to "My Account" navigation
-add_filter( 'woocommerce_account_menu_items', 'add_gallery_menu_item_to_account', 10, 1 );
-function add_gallery_menu_item_to_account( $menu_items ) {
-    // Add a custom menu item for the photo gallery
-    $menu_items['photo_gallery'] = __( 'My Galleries', 'woocommerce' );
-
+add_filter('woocommerce_account_menu_items', 'add_gallery_menu_item_to_account', 10, 1);
+function add_gallery_menu_item_to_account($menu_items) {
+    $menu_items['photo_gallery'] = __('My Galleries', 'woocommerce');
     return $menu_items;
 }
-function add_custom_class_to_account_menu_item( $classes, $endpoint ) {
-    // Check if the menu item is the one you want to customize (e.g., 'gallery')
-    if ( 'photo_gallery' === $endpoint ) {
-        $classes[] = 'custom-gallery-class'; // Add your custom class
-    }
-    return $classes;
-}
-// add_filter( 'woocommerce_account_menu_item_classes', 'add_custom_class_to_account_menu_item', 10, 2 );
-function add_gallery_dashicon_to_account_menu() {
-    // Ensure that Dashicons are loaded on your site
-    wp_enqueue_style( 'dashicons' );
 
-    ?>
-    <style>
-        /* Add the Dashicon for the Gallery */
-        .woocommerce-MyAccount-navigation ul li.custom-gallery-class a::before{
-            content: '\f323' !important;
-            font-family: 'Dashicons' !important;
-            margin-right: 8px !important;
-        }
-    </style>
-    <?php
-}
-// add_action( 'wp_head', 'add_gallery_dashicon_to_account_menu' );
-
-// Step 2: Create an endpoint to display the gallery when the menu item is clicked
-add_shortcode( 'my_photo_galleries', 'display_photo_gallery_endpoint_content' );
+add_shortcode('my_photo_galleries', 'display_photo_gallery_endpoint_content');
 
 function display_photo_gallery_endpoint_content() {
-    // Get the current user ID
     $current_user_id = get_current_user_id();
 
-    // Query the photo_gallery CPT for galleries that the current user is allowed to view
     $args = array(
         'post_type'      => 'photo_gallery',
-        'posts_per_page' => -1, 
+        'posts_per_page' => -1,
     );
 
-    $galleries = new WP_Query( $args );
+    $galleries = new WP_Query($args);
     ob_start();
-    // Check if any galleries exist
-    if ( $galleries->have_posts() ) {
+    if ($galleries->have_posts()) {
         echo '<div class="my-account-photo-gallery">';
         echo '<h2>Your Photo Galleries</h2>';
         echo '<div class="gallery-container">';
 
-        // Loop through each gallery post
-        while ( $galleries->have_posts() ) : $galleries->the_post();
-            // Get the image IDs from the gallery meta
-            // print_r(get_post_meta( get_the_ID(), 'axon_allowed_users', true ));
-            if (!in_array(get_current_user_id(), (array)get_post_meta( get_the_ID(), 'axon_allowed_users', true ))) continue;
+        while ($galleries->have_posts()) : $galleries->the_post();
+            if (!in_array(get_current_user_id(), (array)get_post_meta(get_the_ID(), 'axon_allowed_users', true))) continue;
 
-            $image_ids = get_post_meta( get_the_ID(), 'axon_gallery_images', true );
-            $image_count = count( $image_ids ); // Get the count of images
-            $created_date = get_the_date(); // Get the created date of the gallery
+            $image_ids = get_post_meta(get_the_ID(), 'axon_gallery_images', true);
+            $image_count = count($image_ids);
+            $created_date = get_the_date();
 
-            // Check if images exist
-            if ( ! empty( $image_ids ) ) :
+            if (!empty($image_ids)) :
                 ?>
                 <div class="gallery-item">
-                    <!-- Gallery Header with Title, Date, Image Count, and Show More -->
                     <div class="gallery-header">
                         <h3><?php the_title(); ?></h3>
                         <div class="meta-info">
@@ -1359,56 +1176,47 @@ function display_photo_gallery_endpoint_content() {
                         <a href="<?php the_permalink(); ?>" class="show-more">See All Photos</a>
                     </div>
 
-                    <!-- Gallery Image Preview -->
                     <div class="gallery-images">
                         <?php
-                        // Show the first image in the gallery as a preview
-                        // $first_image_id = $image_ids[0];
-                        // $image_url = wp_get_attachment_url( $first_image_id );,
                         $image_count = 0;
-                        foreach ( $image_ids as $image_id ) {
-                            if ( $image_count < 3 ) { // Show only the first 3 images
-                                $image_url = wp_get_attachment_url( $image_id );
-                                if ( $image_url ) :
+                        foreach ($image_ids as $image_id) {
+                            if ($image_count < 3) {
+                                $image_url = wp_get_attachment_url($image_id);
+                                if ($image_url) :
                                     ?>
-                                    <div class="gallery-thumbnail" style="background-image: url('<?php echo esc_url( $image_url ); ?>');"></div>
+                                    <div class="gallery-thumbnail" style="background-image: url('<?php echo esc_url($image_url); ?>');"></div>
                                 <?php endif;
                                 $image_count++;
                             }
                         }
-                         ?>
+                        ?>
                     </div>
                 </div>
                 <?php
             endif;
         endwhile;
 
-        echo '</div>'; // Close the gallery container
-        echo '</div>'; // Close the my-account-photo-gallery section
-        // Reset post data after custom WP_Query
+        echo '</div>';
+        echo '</div>';
         wp_reset_postdata();
         return ob_get_clean();
     } else {
         return '<p>No galleries found in your account.</p>';
     }
 }
-add_action( 'woocommerce_account_photo_gallery_endpoint', function() {
-    echo do_shortcode( '[my_photo_galleries]');
-} );
-// Step 3: Register the endpoint for the custom menu item
-add_action( 'init', 'add_photo_gallery_endpoint' );
+add_action('woocommerce_account_photo_gallery_endpoint', function() {
+    echo do_shortcode('[my_photo_galleries]');
+});
+
+add_action('init', 'add_photo_gallery_endpoint');
 function add_photo_gallery_endpoint() {
-    // Register the custom endpoint (this will be used for the menu link)
-    add_rewrite_endpoint( 'photo_gallery', EP_ROOT | EP_PAGES );
+    add_rewrite_endpoint('photo_gallery', EP_ROOT | EP_PAGES);
 }
 
-// Step 4: Ensure that WooCommerce refreshes the rewrite rules when needed
-add_action( 'woocommerce_flush_rewrite_rules', 'flush_rewrite_rules_on_gallery_endpoint' );
+add_action('woocommerce_flush_rewrite_rules', 'flush_rewrite_rules_on_gallery_endpoint');
 function flush_rewrite_rules_on_gallery_endpoint() {
     flush_rewrite_rules();
 }
-
-//by Zeeshan
 
 function axon_add_gallery_metaboxes() {
     global $post;
@@ -1425,44 +1233,38 @@ function axon_add_gallery_metaboxes() {
         'Allowed Users',
         'axon_allowed_users_metabox_callback',
         'photo_gallery',
-        'side', // Placing it on the right side
+        'side',
         'high'
     );
 
     $gallery_option = get_post_meta($post->ID, '_gallery_option', true);
 
-    // Conditionally add the Frame Template Settings metabox if gallery_option is 'single_image' or 'multiple_images'
     if ($gallery_option === 'single_image' || $gallery_option === 'multiple_images') {
         add_meta_box(
             'axon_frame_template_metabox',
             'Frame Template Settings',
             'axon_frame_template_metabox_callback',
-            'product', // Changed to WooCommerce product post type
+            'product',
             'normal',
             'high'
         );
     }
-    
 }
 add_action('add_meta_boxes', 'axon_add_gallery_metaboxes');
 
-
-
-// Render the metabox
 function axon_frame_template_metabox_callback($post) {
-    // Add nonce field for security
     wp_nonce_field('axon_frame_template_metabox_nonce', 'axon_frame_template_nonce');
-
-    // Get the saved frame template settings for this post
     $frame_template = get_post_meta($post->ID, '_axon_frame_template', true);
-    if (!$frame_template) {
+    if (!$frame_template || !is_array($frame_template)) {
         $frame_template = array(
             'image_id' => 0,
-            'coordinates' => array('x1' => 0, 'y1' => 0, 'x2' => 0, 'y2' => 0)
+            'coordinates' => array()
         );
     }
 
-    // Render the image selection field
+    $gallery_option = get_post_meta($post->ID, '_gallery_option', true);
+    echo '<input type="hidden" id="gallery-option" value="' . esc_attr($gallery_option) . '" />';
+
     ?>
     <p>
         <label for="frame-template-image-id"><strong>Frame Template Image:</strong></label><br />
@@ -1471,77 +1273,104 @@ function axon_frame_template_metabox_callback($post) {
         <p class="description">Select an image from the media library to use as the frame template.</p>
     </p>
 
-    <!-- Render the coordinates field -->
-    <p><strong>Top-Left (x1, y1):</strong></p>
-    <input type="number" step="0.1" name="axon_frame_template[coordinates][x1]" id="coord-x1" value="<?php echo esc_attr($frame_template['coordinates']['x1']); ?>" readonly />
-    <input type="number" step="0.1" name="axon_frame_template[coordinates][y1]" id="coord-y1" value="<?php echo esc_attr($frame_template['coordinates']['y1']); ?>" readonly />
-    <p><strong>Bottom-Right (x2, y2):</strong></p>
-    <input type="number" step="0.1" name="axon_frame_template[coordinates][x2]" id="coord-x2" value="<?php echo esc_attr($frame_template['coordinates']['x2']); ?>" readonly />
-    <input type="number" step="0.1" name="axon_frame_template[coordinates][y2]" id="coord-y2" value="<?php echo esc_attr($frame_template['coordinates']['y2']); ?>" readonly />
-    <p class="description">Select an area on the image preview below to set the crop coordinates.</p>
-    <input type="hidden" name="axon_frame_template[coordinates][aspect_ratio]" value="0" />
-
-    <!-- Image preview -->
     <div id="frame-template-preview">
-        <h2>Preview and Select Crop Area</h2>
+        <h2>Preview and Select Crop Area(s)</h2>
         <div id="image-preview-container">
             <?php
             $image_id = $frame_template['image_id'];
             if ($image_id) {
                 $image_url = wp_get_attachment_url($image_id);
-                if ($image_url) {
-                    echo '<img id="frame-template-image" src="' . esc_url($image_url) . '" style="max-width: 100%; height: auto;" />';
-                } else {
-                    echo '<p>No image selected.</p>';
-                }
+                echo $image_url ? '<img id="frame-template-image" src="' . esc_url($image_url) . '" style="max-width: 100%; height: auto;" />' : '<p>No image selected.</p>';
             } else {
                 echo '<p>No image selected.</p>';
             }
             ?>
         </div>
     </div>
+
     <?php
+    if ($gallery_option === 'multiple_images') {
+        $coordinates_list = isset($frame_template['coordinates']) ? array_values($frame_template['coordinates']) : array();
+        ?>
+        <div id="crop-areas-container">
+            <?php
+            foreach ($coordinates_list as $index => $coords) {
+                if (!is_array($coords) || !isset($coords['x1'], $coords['y1'], $coords['x2'], $coords['y2'], $coords['aspect_ratio'])) {
+                    continue;
+                }
+                ?>
+                <div class="crop-area" data-index="<?php echo esc_attr($index); ?>">
+                    <p><strong>Crop Area <?php echo intval($index + 1); ?></strong></p>
+                    <input type="hidden" name="axon_frame_template[coordinates][<?php echo $index; ?>][x1]" value="<?php echo esc_attr($coords['x1']); ?>" />
+                    <input type="hidden" name="axon_frame_template[coordinates][<?php echo $index; ?>][y1]" value="<?php echo esc_attr($coords['y1']); ?>" />
+                    <input type="hidden" name="axon_frame_template[coordinates][<?php echo $index; ?>][x2]" value="<?php echo esc_attr($coords['x2']); ?>" />
+                    <input type="hidden" name="axon_frame_template[coordinates][<?php echo $index; ?>][y2]" value="<?php echo esc_attr($coords['y2']); ?>" />
+                    <input type="hidden" name="axon_frame_template[coordinates][<?php echo $index; ?>][aspect_ratio]" value="<?php echo esc_attr($coords['aspect_ratio']); ?>" />
+                    <button type="button" class="remove-crop-area">Remove</button>
+                </div>
+                <?php
+            }
+            ?>
+        </div>
+        <button type="button" id="add-crop-area">Add Crop Area</button>
+        <button type="button" id="save-crop-area" style="display:none;">Save Crop Area</button>
+        <p class="description">Click "Add Crop Area" to define a new crop area on the image. Save each area to add it to the list.</p>
+        <?php
+    } else {
+        $coordinates = !empty($frame_template['coordinates']) && is_array($frame_template['coordinates']) ? $frame_template['coordinates'][0] : array('x1' => 0, 'y1' => 0, 'x2' => 0, 'y2' => 0, 'aspect_ratio' => 0);
+        ?>
+        <p><strong>Top-Left (x1, y1):</strong></p>
+        <input type="number" step="0.1" name="axon_frame_template[coordinates][0][x1]" id="coord-x1" value="<?php echo esc_attr($coordinates['x1']); ?>" readonly />
+        <input type="number" step="0.1" name="axon_frame_template[coordinates][0][y1]" id="coord-y1" value="<?php echo esc_attr($coordinates['y1']); ?>" readonly />
+        <p><strong>Bottom-Right (x2, y2):</strong></p>
+        <input type="number" step="0.1" name="axon_frame_template[coordinates][0][x2]" id="coord-x2" value="<?php echo esc_attr($coordinates['x2']); ?>" readonly />
+        <input type="number" step="0.1" name="axon_frame_template[coordinates][0][y2]" id="coord-y2" value="<?php echo esc_attr($coordinates['y2']); ?>" readonly />
+        <input type="hidden" name="axon_frame_template[coordinates][0][aspect_ratio]" id="coord-aspect-ratio" value="<?php echo esc_attr($coordinates['aspect_ratio']); ?>" />
+        <p class="description">Select an area on the image preview to set the crop coordinates.</p>
+        <?php
+    }
 }
 
-// Save the metabox data
 function axon_save_frame_template_metabox($post_id) {
-    // Check if nonce is set and verify it
     if (!isset($_POST['axon_frame_template_nonce']) || !wp_verify_nonce($_POST['axon_frame_template_nonce'], 'axon_frame_template_metabox_nonce')) {
         return;
     }
-
-    // Check if this is an autosave
     if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
         return;
     }
-
-    // Check user permissions
     if (!current_user_can('edit_post', $post_id)) {
         return;
     }
 
-    // Check if the frame template data is set
     if (isset($_POST['axon_frame_template'])) {
         $frame_template = $_POST['axon_frame_template'];
-
-        // Sanitize the input
         $sanitized_data = array();
         $sanitized_data['image_id'] = isset($frame_template['image_id']) ? absint($frame_template['image_id']) : 0;
-        $sanitized_data['coordinates'] = isset($frame_template['coordinates']) ? array_map('floatval', $frame_template['coordinates']) : array(
-            'x1' => 0,
-            'y1' => 0,
-            'x2' => 0,
-            'y2' => 0
-        );
 
-        // Save the data as post meta
+        if (isset($frame_template['coordinates']) && is_array($frame_template['coordinates'])) {
+            $sanitized_coordinates = array();
+            foreach ($frame_template['coordinates'] as $coord_set) {
+                if (is_array($coord_set) && isset($coord_set['x1'], $coord_set['y1'], $coord_set['x2'], $coord_set['y2'], $coord_set['aspect_ratio'])) {
+                    $sanitized_coordinates[] = array(
+                        'x1' => floatval($coord_set['x1']),
+                        'y1' => floatval($coord_set['y1']),
+                        'x2' => floatval($coord_set['x2']),
+                        'y2' => floatval($coord_set['y2']),
+                        'aspect_ratio' => floatval($coord_set['aspect_ratio'])
+                    );
+                }
+            }
+            $sanitized_data['coordinates'] = $sanitized_coordinates;
+        } else {
+            $sanitized_data['coordinates'] = array();
+        }
+
         update_post_meta($post_id, '_axon_frame_template', $sanitized_data);
     }
 }
 add_action('save_post', 'axon_save_frame_template_metabox');
 
 function axon_enqueue_frame_template_scripts($hook) {
-    // Only enqueue on the post edit screen for product post type
     global $post;
     if ($hook !== 'post.php' && $hook !== 'post-new.php') {
         return;
@@ -1550,14 +1379,10 @@ function axon_enqueue_frame_template_scripts($hook) {
         return;
     }
 
-    // Enqueue WordPress media uploader scripts
     wp_enqueue_media();
-
-    // Enqueue Cropper.js
     wp_enqueue_style('cropper-css', 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css', array(), '1.5.12');
     wp_enqueue_script('cropper-js', 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js', array('jquery'), '1.5.12', true);
 
-    // Enqueue custom script
     wp_enqueue_script(
         'axon-frame-template-script',
         AXON_PLUGIN_URL . 'assets/js/frame-template.js',
@@ -1566,539 +1391,256 @@ function axon_enqueue_frame_template_scripts($hook) {
         true
     );
 
-    // Debug: Confirm the script is enqueued
     error_log('Enqueued frame-template.js for post ID: ' . $post->ID);
 }
 add_action('admin_enqueue_scripts', 'axon_enqueue_frame_template_scripts');
 
+// AJAX handler to composite images
+function composite_images_callback() {
+    check_ajax_referer('axon_photo_gallery_nonce', 'nonce');
 
-add_action('wp_ajax_save_edited_image', 'save_edited_image_callback');
-function save_edited_image_callback() {
-    // Verify nonce for security
-    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'axon_photo_gallery_nonce')) {
-        wp_send_json_error('Invalid nonce');
-        wp_die();
+    $response = array('success' => false);
+
+    try {
+        // Handle both single and multiple image cases
+        $edited_image_url = isset($_POST['edited_image_url']) ? esc_url_raw($_POST['edited_image_url']) : '';
+        $edited_image_urls = isset($_POST['edited_image_urls']) && is_array($_POST['edited_image_urls']) ? array_map('esc_url_raw', $_POST['edited_image_urls']) : ($edited_image_url ? [$edited_image_url] : []);
+        $coordinates = isset($_POST['coordinates']) ? (array) $_POST['coordinates'] : [];
+        $frame_image_url = isset($_POST['frame_image_url']) ? esc_url_raw($_POST['frame_image_url']) : '';
+
+        if (empty($edited_image_urls) || empty($coordinates) || empty($frame_image_url)) {
+            $response['data'] = 'Missing required parameters: edited_image_urls=' . print_r($edited_image_urls, true) . ', coordinates=' . print_r($coordinates, true) . ', frame_image_url=' . $frame_image_url;
+            wp_send_json_error($response);
+            wp_die();
+        }
+
+        $upload_dir = wp_upload_dir();
+        $frame_path = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $frame_image_url);
+        if (!file_exists($frame_path)) {
+            $response['data'] = 'Frame image not found: ' . $frame_path;
+            wp_send_json_error($response);
+            wp_die();
+        }
+
+        // Determine frame image type and load
+        $frame_type = exif_imagetype($frame_path);
+        $frame = false;
+        switch ($frame_type) {
+            case IMAGETYPE_JPEG:
+                $frame = imagecreatefromjpeg($frame_path);
+                break;
+            case IMAGETYPE_PNG:
+                $frame = imagecreatefrompng($frame_path);
+                break;
+            default:
+                $response['data'] = 'Unsupported frame image format: ' . $frame_path;
+                wp_send_json_error($response);
+                wp_die();
+        }
+        if ($frame === false) {
+            $response['data'] = 'Failed to load frame image: ' . $frame_path;
+            wp_send_json_error($response);
+            wp_die();
+        }
+
+        $frame_width = imagesx($frame);
+        $frame_height = imagesy($frame);
+
+        // Process each edited image
+        $edited_images = [];
+        foreach ($edited_image_urls as $index => $url) {
+            $edited_path = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $url);
+            if (!file_exists($edited_path)) {
+                error_log('Edited image not found: ' . $edited_path);
+                continue;
+            }
+
+            $edited_type = exif_imagetype($edited_path);
+            $edited = false;
+            switch ($edited_type) {
+                case IMAGETYPE_PNG:
+                    $edited = imagecreatefrompng($edited_path);
+                    break;
+                case IMAGETYPE_JPEG:
+                    $edited = imagecreatefromjpeg($edited_path);
+                    break;
+                default:
+                    error_log('Unsupported edited image format: ' . $edited_path);
+                    continue 2;
+            }
+            if ($edited === false) {
+                error_log('Failed to load edited image: ' . $edited_path);
+                continue;
+            }
+
+            $edited_width = imagesx($edited);
+            $edited_height = imagesy($edited);
+
+            // Validate and normalize coordinates
+            $coord = isset($coordinates[$index]) && is_array($coordinates[$index]) ? $coordinates[$index] : (is_array($coordinates) && !isset($coordinates[0]) ? $coordinates : []);
+            $coord = array_merge(['x1' => 0, 'y1' => 0, 'x2' => 0, 'y2' => 0, 'aspect_ratio' => $edited_width / $edited_height, 'frame_original_width' => $frame_width, 'frame_original_height' => $frame_height], $coord);
+            $x = floatval($coord['x1']);
+            $y = floatval($coord['y1']);
+            $width = floatval($coord['x2'] - $coord['x1']);
+            $height = floatval($coord['y2'] - $coord['y1']);
+
+            // Calculate scaling factor based on frame's original width
+            $frame_original_width = floatval($coord['frame_original_width']);
+            $scale_factor = $frame_original_width > 0 ? $frame_width / $frame_original_width : 1;
+            $x *= $scale_factor;
+            $y *= $scale_factor;
+            $width *= $scale_factor;
+            $height *= $scale_factor;
+
+            // Handle invalid dimensions by using aspect ratio to compute a centered area
+            if ($width <= 0 || $height <= 0) {
+                error_log('Invalid coordinates for image ' . $index . ': width=' . $width . ', height=' . $height . '. Computing fallback dimensions.');
+                $aspect_ratio = floatval($coord['aspect_ratio']);
+                if ($aspect_ratio <= 0) $aspect_ratio = $edited_width / $edited_height;
+
+                // Use 80% of frame dimensions as a fallback
+                if ($frame_width / $frame_height > $aspect_ratio) {
+                    $height = $frame_height * 0.8;
+                    $width = $height * $aspect_ratio;
+                } else {
+                    $width = $frame_width * 0.8;
+                    $height = $width / $aspect_ratio;
+                }
+
+                $x = ($frame_width - $width) / 2;
+                $y = ($frame_height - $height) / 2;
+            }
+
+            // Clamp to frame boundaries
+            $x = max(0, min($x, $frame_width - $width));
+            $y = max(0, min($y, $frame_height - $height));
+            $width = min($width, $frame_width - $x);
+            $height = min($height, $frame_height - $y);
+
+            // Ensure the edited image fits within the coordinates while maintaining aspect ratio
+            $target_aspect_ratio = $width / $height;
+            $edited_aspect_ratio = $edited_width / $edited_height;
+            $resized_width = $width;
+            $resized_height = $height;
+
+            if ($edited_aspect_ratio != $target_aspect_ratio) {
+                if ($edited_aspect_ratio > $target_aspect_ratio) {
+                    // Edited image is wider: fit to height, adjust width
+                    $resized_width = $height * $edited_aspect_ratio;
+                    $x += ($width - $resized_width) / 2; // Center horizontally
+                } else {
+                    // Edited image is taller: fit to width, adjust height
+                    $resized_height = $width / $edited_aspect_ratio;
+                    $y += ($height - $resized_height) / 2; // Center vertically
+                }
+            }
+
+            // Resize edited image to fit coordinates
+            $resized = imagecreatetruecolor($resized_width, $resized_height);
+            imagealphablending($resized, false);
+            imagesavealpha($resized, true);
+            imagecopyresampled($resized, $edited, 0, 0, 0, 0, $resized_width, $resized_height, $edited_width, $edited_height);
+            imagedestroy($edited);
+
+            // Composite the image onto the frame at the exact coordinates
+            imagecopy($frame, $resized, $x, $y, 0, 0, $resized_width, $resized_height);
+            imagedestroy($resized);
+
+            $edited_images[] = $edited_path;
+            error_log('Composited image ' . $index . ': x=' . $x . ', y=' . $y . ', width=' . $resized_width . ', height=' . $resized_height);
+        }
+
+        // Save the composite image
+        $composite_filename = 'composited-image-' . wp_generate_uuid4() . '.png';
+        $composite_path = $upload_dir['path'] . '/' . $composite_filename;
+        imagepng($frame, $composite_path);
+        imagedestroy($frame);
+
+        $composite_url = $upload_dir['url'] . '/' . $composite_filename;
+        if ($composite_url) {
+            wp_send_json([
+                'success' => true,
+                'composite_url' => $composite_url
+            ]);
+        } else {
+            wp_send_json([
+                'success' => false,
+                'message' => 'Failed to composite images'
+            ]);
+        }
+
+        error_log('Composite created with frame: ' . $frame_path . ', edited images: ' . print_r($edited_images, true) . ', coordinates: ' . print_r($coordinates, true));
+    } catch (Exception $e) {
+        error_log('Error in package_composite_images_callback: ' . $e->getMessage());
+        $response['data'] = 'Critical error: ' . $e->getMessage();
+        wp_send_json_error($response);
     }
-
-    // Check if image data is provided
-    if (!isset($_POST['image_data']) || empty($_POST['image_data'])) {
-        wp_send_json_error('No image data provided');
-        wp_die();
-    }
-
-    // Get the base64-encoded image data
-    $image_data = $_POST['image_data'];
-
-    // Remove the data URL prefix (e.g., "data:image/png;base64,")
-    $image_data = str_replace('data:image/png;base64,', '', $image_data);
-    $image_data = str_replace(' ', '+', $image_data);
-
-    // Decode the base64 string to binary data
-    $decoded_image = base64_decode($image_data);
-    if ($decoded_image === false) {
-        wp_send_json_error('Failed to decode image data');
-        wp_die();
-    }
-
-    // Generate a unique filename
-    $upload_dir = wp_upload_dir();
-    $filename = 'edited-image-' . uniqid() . '.png';
-    $file_path = $upload_dir['path'] . '/' . $filename;
-
-    // Save the image to the uploads directory
-    $result = file_put_contents($file_path, $decoded_image);
-    if ($result === false) {
-        wp_send_json_error('Failed to save image to server');
-        wp_die();
-    }
-
-    // Generate the URL for the saved image
-    $file_url = $upload_dir['url'] . '/' . $filename;
-
-    // Prepare the attachment data
-    $filetype = wp_check_filetype($filename, null);
-    $attachment = array(
-        'guid'           => $file_url,
-        'post_mime_type' => $filetype['type'],
-        'post_title'     => sanitize_file_name($filename),
-        'post_content'   => '',
-        'post_status'    => 'inherit'
-    );
-
-    // Insert the attachment into the media library
-    $attachment_id = wp_insert_attachment($attachment, $file_path);
-    if (is_wp_error($attachment_id)) {
-        wp_send_json_error('Failed to create attachment: ' . $attachment_id->get_error_message());
-        wp_die();
-    }
-
-    // Generate the attachment metadata and update the attachment
-    require_once(ABSPATH . 'wp-admin/includes/image.php');
-    $attach_data = wp_generate_attachment_metadata($attachment_id, $file_path);
-    wp_update_attachment_metadata($attachment_id, $attach_data);
-
-    // Return success response with the file URL and attachment ID
-    wp_send_json_success(array(
-        'message'      => 'Image saved successfully',
-        'file_url'     => $file_url,
-        'attachment_id' => $attachment_id, // Include the attachment ID
-    ));
 
     wp_die();
 }
 
 add_action('wp_ajax_composite_images', 'composite_images_callback');
-function composite_images_callback() {
-    error_log('Starting composite_images_callback');
+add_action('wp_ajax_nopriv_composite_images', 'composite_images_callback');
 
-    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'axon_photo_gallery_nonce')) {
-        error_log('Composite Images: Invalid nonce');
-        wp_send_json_error('Invalid nonce');
+function save_edited_image_callback() {
+    if (!current_user_can('edit_posts')) {
+        wp_send_json_error('Permission denied');
         wp_die();
     }
 
-    if (!isset($_POST['frame_image_url']) || !isset($_POST['edited_image_url']) || !isset($_POST['coordinates'])) {
-        error_log('Composite Images: Missing required parameters');
-        wp_send_json_error('Missing required parameters');
+    $image_data = isset($_POST['image_data']) ? $_POST['image_data'] : '';
+    if (empty($image_data) || !preg_match('/^data:image\/(png|jpeg);base64,/', $image_data)) {
+        error_log('Invalid image data in save_edited_image_callback');
+        wp_send_json_error('Invalid image data');
         wp_die();
     }
 
-    $frame_image_url = esc_url_raw($_POST['frame_image_url']);
-    $edited_image_url = esc_url_raw($_POST['edited_image_url']);
-    $coordinates = array_map('floatval', $_POST['coordinates']);
+    $image_data = str_replace('data:image/png;base64,', '', $image_data);
+    $image_data = str_replace('data:image/jpeg;base64,', '', $image_data);
+    $image_data = str_replace(' ', '+', $image_data);
+    $decoded_image = base64_decode($image_data);
 
-    error_log('Frame Image URL: ' . $frame_image_url);
-    error_log('Edited Image URL: ' . $edited_image_url);
-    error_log('Coordinates: ' . print_r($coordinates, true));
-
-    if (!isset($coordinates['x1']) || !isset($coordinates['y1']) || !isset($coordinates['x2']) || !isset($coordinates['y2'])) {
-        error_log('Composite Images: Invalid coordinates');
-        wp_send_json_error('Invalid coordinates');
+    if ($decoded_image === false) {
+        error_log('Failed to decode base64 image in save_edited_image_callback');
+        wp_send_json_error('Failed to decode image');
         wp_die();
     }
 
     $upload_dir = wp_upload_dir();
-    $frame_image_path = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $frame_image_url);
-    $edited_image_path = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $edited_image_url);
+    $image_filename = 'edited-image-' . uniqid() . '.png';
+    $image_path = $upload_dir['path'] . '/' . $image_filename;
 
-    error_log('Frame Image Path: ' . $frame_image_path);
-    error_log('Edited Image Path: ' . $edited_image_path);
-
-    if (!file_exists($frame_image_path) || !file_exists($edited_image_path)) {
-        error_log('Composite Images: One or both images not found');
-        wp_send_json_error('One or both images not found');
+    if (!file_put_contents($image_path, $decoded_image)) {
+        error_log('Failed to save edited image to: ' . $image_path);
+        wp_send_json_error('Failed to save image');
         wp_die();
     }
 
-    if (!function_exists('imagecreatefrompng')) {
-        error_log('Composite Images: GD library is not available');
-        wp_send_json_error('GD library is not available on the server');
-        wp_die();
+    $image_url = $upload_dir['url'] . '/' . $image_filename;
+    $attachment = wp_insert_attachment([
+        'post_mime_type' => 'image/png',
+        'post_title' => 'Edited Image',
+        'post_content' => '',
+        'post_status' => 'inherit',
+    ], $image_path);
+
+    if (!is_wp_error($attachment)) {
+        require_once(ABSPATH . 'wp-admin/includes/image.php');
+        $attachment_data = wp_generate_attachment_metadata($attachment, $image_path);
+        wp_update_attachment_metadata($attachment, $attachment_data);
     }
 
-    $frame_image_info = getimagesize($frame_image_path);
-    $edited_image_info = getimagesize($edited_image_path);
-
-    if (!$frame_image_info || !$edited_image_info) {
-        error_log('Composite Images: Failed to get image info');
-        wp_send_json_error('Failed to get image info');
-        wp_die();
-    }
-
-    $frame_image_type = $frame_image_info[2];
-    $edited_image_type = $edited_image_info[2];
-
-    error_log('Frame Image Type: ' . $frame_image_type);
-    error_log('Edited Image Type: ' . $edited_image_type);
-
-    // Load the frame image
-    switch ($frame_image_type) {
-        case IMAGETYPE_PNG:
-            $frame_image = imagecreatefrompng($frame_image_path);
-            break;
-        case IMAGETYPE_JPEG:
-            $frame_image = imagecreatefromjpeg($frame_image_path);
-            break;
-        case IMAGETYPE_GIF:
-            $frame_image = imagecreatefromgif($frame_image_path);
-            break;
-        default:
-            error_log('Composite Images: Unsupported frame image type');
-            wp_send_json_error('Unsupported frame image type');
-            wp_die();
-    }
-
-    // Load the edited image
-    switch ($edited_image_type) {
-        case IMAGETYPE_PNG:
-            $edited_image = imagecreatefrompng($edited_image_path);
-            break;
-        case IMAGETYPE_JPEG:
-            $edited_image = imagecreatefromjpeg($edited_image_path);
-            break;
-        case IMAGETYPE_GIF:
-            $edited_image = imagecreatefromgif($edited_image_path);
-            break;
-        default:
-            error_log('Composite Images: Unsupported edited image type');
-            wp_send_json_error('Unsupported edited image type');
-            wp_die();
-    }
-
-    if (!$frame_image || !$edited_image) {
-        error_log('Composite Images: Failed to load images');
-        wp_send_json_error('Failed to load images');
-        wp_die();
-    }
-
-    // Get original dimensions
-    $frame_width = imagesx($frame_image);
-    $frame_height = imagesy($frame_image);
-    $edited_width = imagesx($edited_image);
-    $edited_height = imagesy($edited_image);
-
-    error_log('Frame Image Original Dimensions: ' . $frame_width . 'x' . $frame_height);
-    error_log('Edited Image Original Dimensions: ' . $edited_width . 'x' . $edited_height);
-
-    // Resize images to a maximum width of 1200px to improve performance
-    $max_width = 1200;
-    if ($frame_width > $max_width) {
-        $new_frame_width = $max_width;
-        $new_frame_height = (int)($frame_height * ($max_width / $frame_width));
-        $resized_frame_image = imagecreatetruecolor($new_frame_width, $new_frame_height);
-        imagecopyresampled(
-            $resized_frame_image,
-            $frame_image,
-            0,
-            0,
-            0,
-            0,
-            $new_frame_width,
-            $new_frame_height,
-            $frame_width,
-            $frame_height
-        );
-        imagedestroy($frame_image);
-        $frame_image = $resized_frame_image;
-        $frame_width = $new_frame_width;
-        $frame_height = $new_frame_height;
-
-        // Scale coordinates to the new frame dimensions
-        $scale_factor = $max_width / $coordinates['frame_original_width'];
-        $coordinates['x1'] *= $scale_factor;
-        $coordinates['y1'] *= $scale_factor;
-        $coordinates['x2'] *= $scale_factor;
-        $coordinates['y2'] *= $scale_factor;
-
-        error_log('Resized Frame Image Dimensions: ' . $frame_width . 'x' . $frame_height);
-        error_log('Scaled Coordinates after Frame Resize: ' . print_r($coordinates, true));
-    }
-
-    if ($edited_width > $max_width) {
-        $new_edited_width = $max_width;
-        $new_edited_height = (int)($edited_height * ($max_width / $edited_width));
-        $resized_edited_image = imagecreatetruecolor($new_edited_width, $new_edited_height);
-        imagecopyresampled(
-            $resized_edited_image,
-            $edited_image,
-            0,
-            0,
-            0,
-            0,
-            $new_edited_width,
-            $new_edited_height,
-            $edited_width,
-            $edited_height
-        );
-        imagedestroy($edited_image);
-        $edited_image = $resized_edited_image;
-        $edited_width = $new_edited_width;
-        $edited_height = $new_edited_height;
-
-        error_log('Resized Edited Image Dimensions: ' . $edited_width . 'x' . $edited_height);
-    }
-
-    // Use the pre-scaled coordinates
-    $x1 = (int)$coordinates['x1'];
-    $y1 = (int)$coordinates['y1'];
-    $x2 = (int)$coordinates['x2'];
-    $y2 = (int)$coordinates['y2'];
-
-    // Validate coordinates
-    if ($x1 >= $x2 || $y1 >= $y2) {
-        error_log('Composite Images: Invalid coordinates (x1 >= x2 or y1 >= y2)');
-        wp_send_json_error('Invalid coordinates');
-        wp_die();
-    }
-
-    // Clamp coordinates to frame image bounds
-    $x1 = max(0, min($x1, $frame_width - 1));
-    $y1 = max(0, min($y1, $frame_height - 1));
-    $x2 = max(0, min($x2, $frame_width));
-    $y2 = max(0, min($y2, $frame_height));
-
-    error_log('Clamped Coordinates: x1=' . $x1 . ', y1=' . $y1 . ', x2=' . $x2 . ', y2=' . $y2);
-
-    // Calculate crop dimensions
-    $crop_width = $x2 - $x1;
-    $crop_height = $y2 - $y1;
-    error_log('Crop Dimensions: width=' . $crop_width . ', height=' . $crop_height);
-
-    // Validate crop dimensions
-    if ($crop_width <= 0 || $crop_height <= 0) {
-        error_log('Composite Images: Crop dimensions are invalid (width or height <= 0)');
-        wp_send_json_error('Crop dimensions are invalid');
-        wp_die();
-    }
-
-    // Resize the edited image to fit the crop area
-    $resized_edited_image = imagecreatetruecolor($crop_width, $crop_height);
-    if (!$resized_edited_image) {
-        error_log('Composite Images: Failed to create resized image resource');
-        wp_send_json_error('Failed to create resized image resource');
-        wp_die();
-    }
-
-    // Only enable transparency if the edited image is PNG
-    if ($edited_image_type === IMAGETYPE_PNG) {
-        imagealphablending($resized_edited_image, false);
-        imagesavealpha($resized_edited_image, true);
-        $transparent = imagecolorallocatealpha($resized_edited_image, 0, 0, 0, 127);
-        imagefill($resized_edited_image, 0, 0, $transparent);
-    }
-
-    // Resize the edited image into the crop area dimensions
-    $resize_result = imagecopyresampled(
-        $resized_edited_image,
-        $edited_image,
-        0,
-        0,
-        0,
-        0,
-        $crop_width,
-        $crop_height,
-        $edited_width,
-        $edited_height
-    );
-    if (!$resize_result) {
-        error_log('Composite Images: Failed to resize edited image');
-        wp_send_json_error('Failed to resize edited image');
-        wp_die();
-    }
-
-    // Only enable transparency for the frame image if it's PNG
-    if ($frame_image_type === IMAGETYPE_PNG) {
-        imagealphablending($frame_image, true);
-        imagesavealpha($frame_image, true);
-    }
-
-    // Composite the resized edited image onto the frame image
-    $composite_result = imagecopy(
-        $frame_image,
-        $resized_edited_image,
-        $x1,
-        $y1,
-        0,
-        0,
-        $crop_width,
-        $crop_height
-    );
-    if (!$composite_result) {
-        error_log('Composite Images: Failed to composite images at position x1=' . $x1 . ', y1=' . $y1);
-        wp_send_json_error('Failed to composite images');
-        wp_die();
-    }
-
-    // Save the composited image with lower quality for faster saving
-    $composite_filename = 'composited-image-' . uniqid() . '.png';
-    $composite_path = $upload_dir['path'] . '/' . $composite_filename;
-    $save_result = imagepng($frame_image, $composite_path, 6); // Lower quality for faster saving
-    if (!$save_result) {
-        error_log('Composite Images: Failed to save composited image to ' . $composite_path);
-        wp_send_json_error('Failed to save composited image');
-        wp_die();
-    }
-
-    // Generate the URL for the composited image
-    $composite_url = $upload_dir['url'] . '/' . $composite_filename;
-
-    // Clean up
-    imagedestroy($frame_image);
-    imagedestroy($edited_image);
-    imagedestroy($resized_edited_image);
-
-    error_log('Composite Images: Success - Composited image URL: ' . $composite_url);
-
-    wp_send_json_success(array(
-        'message' => 'Image composited successfully',
-        'composite_url' => $composite_url
-    ));
-
+    wp_send_json_success(['file_url' => $image_url, 'attachment_id' => $attachment]);
     wp_die();
 }
+add_action('wp_ajax_save_edited_image', 'save_edited_image_callback');
+add_action('wp_ajax_nopriv_save_edited_image', 'save_edited_image_callback');
 
 
-function enqueue_package_gallery_script() {
-    if (!is_product()) {
-        return;
-    }
-
-    $product = wc_get_product(get_the_ID());
-    $is_package_product = $product && $product->get_type() === 'package';
-
-    if ($is_package_product) {
-        // Retrieve sub-product IDs from the package's meta
-        $package_products = get_post_meta(get_the_ID(), '_package_products', true);
-        if (!is_array($package_products)) {
-            $package_products = array();
-        }
-
-        // Prepare settings for each sub-product
-        $sub_product_settings = array();
-
-        foreach ($package_products as $product_data) {
-            $product_id = $product_data['product'];
-            $frame_template = get_post_meta($product_id, '_axon_frame_template', true);
-
-            $default_settings = array(
-                'image_id' => 0,
-                'coordinates' => array('x1' => 0, 'y1' => 0, 'x2' => 0, 'y2' => 0, 'aspect_ratio' => 0),
-                'frame_image_url' => ''
-            );
-
-            $settings = $frame_template ?: $default_settings;
-            $settings = wp_parse_args($settings, $default_settings);
-
-            if (!empty($settings['image_id'])) {
-                $frame_image_url = wp_get_attachment_url($settings['image_id']);
-                $settings['frame_image_url'] = $frame_image_url ?: '';
-
-                $frame_image_path = get_attached_file($settings['image_id']);
-                if ($frame_image_path && file_exists($frame_image_path)) {
-                    $frame_image_info = getimagesize($frame_image_path);
-                    if ($frame_image_info) {
-                        $frame_width = $frame_image_info[0];
-                        $frame_height = $frame_image_info[1];
-                        error_log('Frame image dimensions for product ID ' . $product_id . ': ' . $frame_width . 'x' . $frame_height);
-
-                        $admin_preview_width = 1200;
-                        $scale_factor = $admin_preview_width / $frame_width;
-
-                        $settings['coordinates']['x1'] = floatval($settings['coordinates']['x1']) * $scale_factor;
-                        $settings['coordinates']['y1'] = floatval($settings['coordinates']['y1']) * $scale_factor;
-                        $settings['coordinates']['x2'] = floatval($settings['coordinates']['x2']) * $scale_factor;
-                        $settings['coordinates']['y2'] = floatval($settings['coordinates']['y2']) * $scale_factor;
-
-                        error_log('Scaled coordinates for admin preview for product ID ' . $product_id . ': ' . print_r($settings['coordinates'], true));
-                    }
-                }
-            } else {
-                $settings['frame_image_url'] = '';
-            }
-
-            $sub_product_settings[$product_id] = $settings;
-            error_log('Settings for product ID ' . $product_id . ': ' . print_r($settings, true));
-        }
-
-        // Enqueue the package script (no dependency on axon-gallery-script)
-        wp_enqueue_script(
-            'axon-package-gallery-script',
-            plugin_dir_url(__FILE__) . 'assets/js/package-gallery-script.js',
-            array('jquery'),
-            '1.0.0',
-            true
-        );
-
-        // Localize script with sub-product settings
-        wp_localize_script(
-            'axon-package-gallery-script',
-            'packageAjax',
-            array(
-                'ajaxurl' => admin_url('admin-ajax.php'),
-                'nonce' => wp_create_nonce('axon_photo_gallery_nonce'),
-                'sub_product_settings' => $sub_product_settings
-            )
-        );
-
-        error_log('Final sub_product_settings passed to JavaScript: ' . print_r($sub_product_settings, true));
-
-        wp_enqueue_style(
-            'axon-package-gallery-style',
-            plugin_dir_url(__FILE__) . 'assets/css/package-dummy.css',
-            array(),
-            '1.0.0'
-        );
-
-        // Base CSS for the preview modal
-        $css = '
-            #preview-modal {
-                display: none;
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.5);
-                z-index: 10000;
-                justify-content: center;
-                align-items: center;
-            }
-            #preview-modal-content {
-                background: white;
-                padding: 20px;
-                border-radius: 5px;
-                position: relative;
-                max-width: 90%;
-                max-height: 90%;
-                overflow: auto;
-                text-align: center;
-                margin-top: 30px;
-            }
-            #preview-modal-close {
-                position: absolute;
-                top: 10px;
-                right: 10px;
-                cursor: pointer;
-                font-size: 24px;
-            }
-            #preview-image {
-                max-width: 100%;
-                max-height: 80vh;
-                height: auto;
-            }
-        ';
-
-        // Add CSS to hide preset buttons for products with custom ratios
-        foreach ($sub_product_settings as $product_id => $settings) {
-            $coordinates = $settings['coordinates'];
-            $has_frame_image = !empty($settings['frame_image_url']);
-            $has_valid_coordinates = $coordinates['x1'] != 0 || $coordinates['y1'] != 0 || $coordinates['x2'] != 0 || $coordinates['y2'] != 0;
-            $has_valid_aspect_ratio = floatval($coordinates['aspect_ratio']) > 0;
-            $use_custom_ratios = $has_frame_image && $has_valid_coordinates && $has_valid_aspect_ratio;
-
-            if ($use_custom_ratios) {
-                $css .= '
-                    /* Hide preset buttons for product ID ' . $product_id . ' */
-                    div.tui-image-editor-container[data-product-id="' . $product_id . '"] ul.tui-image-editor-submenu-item li.tui-image-editor-button.preset,
-                    div.tui-image-editor-container[data-product-id="' . $product_id . '"] ul.tui-image-editor-submenu-item li.tie-crop-preset-button {
-                        display: none !important;
-                    }
-                ';
-                error_log('Custom ratios are set for product ID ' . $product_id . ', hiding preset buttons via CSS');
-            } else {
-                error_log('No custom ratios set for product ID ' . $product_id . ', preset buttons will be visible');
-            }
-        }
-
-        wp_add_inline_style('axon-package-gallery-style', $css);
-        error_log('Inline CSS enqueued for axon-package-gallery-style: ' . $css);
-    }
-}
-add_action('wp_enqueue_scripts', 'enqueue_package_gallery_script');
 
 function enqueue_custom_script() {
     if (!is_product()) {
-        return; 
+        return;
     }
 
     $product_id = get_the_ID();
@@ -2120,46 +1662,58 @@ function enqueue_custom_script() {
             AXON_SCRIPTS_VERSION
         );
 
-        $frame_template_settings = get_post_meta($product_id, '_axon_frame_template', true);
-        $default_settings = array(
+        $frame_template_settings = get_post_meta($product_id, '_axon_frame_template', true) ?: [
             'image_id' => 0,
-            'coordinates' => array('x1' => 0.0, 'y1' => 0.0, 'x2' => 0.0, 'y2' => 0.0, 'aspect_ratio' => 0),
+            'coordinates' => [],
             'frame_image_url' => ''
-        );
+        ];
 
-        if (!$frame_template_settings || !is_array($frame_template_settings)) {
-            $frame_template_settings = $default_settings;
-        } else {
-            $frame_template_settings = wp_parse_args($frame_template_settings, $default_settings);
-            if (!empty($frame_template_settings['image_id'])) {
-                $frame_image_url = wp_get_attachment_url($frame_template_settings['image_id']);
-                $frame_template_settings['frame_image_url'] = $frame_image_url ?: '';
-
-                $frame_image_path = get_attached_file($frame_template_settings['image_id']);
-                if ($frame_image_path && file_exists($frame_image_path)) {
-                    $frame_image_info = getimagesize($frame_image_path);
-                    if ($frame_image_info) {
-                        $frame_width = $frame_image_info[0];
-                        $frame_height = $frame_image_info[1];
-                        error_log('Frame image dimensions in enqueue_custom_script: ' . $frame_width . 'x' . $frame_height);
-
-                        $admin_preview_width = 1200;
-                        $scale_factor = $admin_preview_width / $frame_width;
-
-                        $frame_template_settings['coordinates']['x1'] = floatval($frame_template_settings['coordinates']['x1']) * $scale_factor;
-                        $frame_template_settings['coordinates']['y1'] = floatval($frame_template_settings['coordinates']['y1']) * $scale_factor;
-                        $frame_template_settings['coordinates']['x2'] = floatval($frame_template_settings['coordinates']['x2']) * $scale_factor;
-                        $frame_template_settings['coordinates']['y2'] = floatval($frame_template_settings['coordinates']['y2']) * $scale_factor;
-
-                        error_log('Scaled coordinates for admin preview: ' . print_r($frame_template_settings['coordinates'], true));
-                    }
+        if (!is_array($frame_template_settings['coordinates'])) {
+            $frame_template_settings['coordinates'] = [];
+        }
+        $gallery_option = get_post_meta($product_id, '_gallery_option', true);
+        if ($gallery_option === 'single_image' && !empty($frame_template_settings['coordinates'])) {
+            $frame_template_settings['coordinates'] = $frame_template_settings['coordinates'][0] ?: ['x1' => 0, 'y1' => 0, 'x2' => 0, 'y2' => 0, 'aspect_ratio' => 0];
+        } elseif ($gallery_option === 'multiple_images' && !empty($frame_template_settings['coordinates'])) {
+            foreach ($frame_template_settings['coordinates'] as &$coords) {
+                if (!is_array($coords)) {
+                    $coords = ['x1' => 0, 'y1' => 0, 'x2' => 0, 'y2' => 0, 'aspect_ratio' => 0];
                 }
-            } else {
-                $frame_template_settings['frame_image_url'] = '';
             }
+            unset($coords);
         }
 
-        error_log('Frame template settings: ' . print_r($frame_template_settings, true));
+        if (!empty($frame_template_settings['image_id'])) {
+            $frame_image_url = wp_get_attachment_url($frame_template_settings['image_id']) ?: '';
+            $frame_image_path = get_attached_file($frame_template_settings['image_id']);
+            if ($frame_image_path && file_exists($frame_image_path)) {
+                $frame_image_info = getimagesize($frame_image_path);
+                if ($frame_image_info) {
+                    $frame_width = $frame_image_info[0];
+                    $frame_height = $frame_image_info[1];
+                    $admin_preview_width = 1200;
+                    $scale_factor = $admin_preview_width / $frame_width;
+                    if ($gallery_option === 'single_image' && !empty($frame_template_settings['coordinates'])) {
+                        $coords = &$frame_template_settings['coordinates'];
+                        $coords['x1'] = floatval($coords['x1']) * $scale_factor;
+                        $coords['y1'] = floatval($coords['y1']) * $scale_factor;
+                        $coords['x2'] = floatval($coords['x2']) * $scale_factor;
+                        $coords['y2'] = floatval($coords['y2']) * $scale_factor;
+                        $coords['aspect_ratio'] = floatval($coords['aspect_ratio']);
+                    } elseif ($gallery_option === 'multiple_images') {
+                        foreach ($frame_template_settings['coordinates'] as &$coords) {
+                            $coords['x1'] = floatval($coords['x1']) * $scale_factor;
+                            $coords['y1'] = floatval($coords['y1']) * $scale_factor;
+                            $coords['x2'] = floatval($coords['x2']) * $scale_factor;
+                            $coords['y2'] = floatval($coords['y2']) * $scale_factor;
+                            $coords['aspect_ratio'] = floatval($coords['aspect_ratio']);
+                        }
+                        unset($coords);
+                    }
+                }
+            }
+            $frame_template_settings['frame_image_url'] = $frame_image_url;
+        }
 
         wp_localize_script(
             'axon-gallery-script',
@@ -2170,14 +1724,6 @@ function enqueue_custom_script() {
                 'frame_template' => $frame_template_settings
             )
         );
-
-        $has_frame_image = !empty($frame_template_settings['frame_image_url']);
-        $has_valid_coordinates = $frame_template_settings['coordinates']['x1'] != 0 || 
-                                $frame_template_settings['coordinates']['y1'] != 0 || 
-                                $frame_template_settings['coordinates']['x2'] != 0 || 
-                                $frame_template_settings['coordinates']['y2'] != 0;
-        $has_valid_aspect_ratio = floatval($frame_template_settings['coordinates']['aspect_ratio']) > 0;
-        $use_custom_ratios = $has_frame_image && $has_valid_coordinates && $has_valid_aspect_ratio;
 
         $css = '
             #preview-modal {
@@ -2217,20 +1763,368 @@ function enqueue_custom_script() {
             }
         ';
 
-        if ($use_custom_ratios) {
+        $coordinates = $frame_template_settings['coordinates'];
+        $has_frame_image = !empty($frame_template_settings['frame_image_url']);
+        $has_valid_coordinates = (isset($coordinates['x1']) ? $coordinates['x1'] : 0) != 0 || (isset($coordinates['y1']) ? $coordinates['y1'] : 0) != 0 || (isset($coordinates['x2']) ? $coordinates['x2'] : 0) != 0 || (isset($coordinates['y2']) ? $coordinates['y2'] : 0) != 0;
+        $has_valid_aspect_ratio = floatval(isset($coordinates['aspect_ratio']) ? $coordinates['aspect_ratio'] : 0) > 0;
+        if ($gallery_option === 'single_image' && $has_frame_image && $has_valid_coordinates && $has_valid_aspect_ratio) {
             $css .= '
                 div.tui-image-editor-container ul.tui-image-editor-submenu-item li.tui-image-editor-button.preset,
                 div.tui-image-editor-container ul.tui-image-editor-submenu-item li.tie-crop-preset-button {
                     display: none !important;
                 }
             ';
-            error_log('Custom ratios are set, hiding preset buttons via CSS');
-        } else {
-            error_log('No custom ratios set, preset buttons will be visible');
         }
 
         wp_add_inline_style('axon-gallery-style', $css);
-        error_log('Inline CSS enqueued for axon-gallery-style: ' . $css);
     }
 }
 add_action('wp_enqueue_scripts', 'enqueue_custom_script');
+
+function update_frame_template_coordinates() {
+    
+    check_ajax_referer('axon_photo_gallery_nonce', 'nonce');
+
+    $product_id = isset($_POST['product_id']) ? intval($_POST['product_id']) : 0;
+    $coordinates = isset($_POST['coordinates']) ? (array) $_POST['coordinates'] : [];
+
+    if (!$product_id || empty($coordinates)) {
+        wp_send_json_error(['message' => 'Invalid product ID or coordinates']);
+        return;
+    }
+
+    $frame_template_settings = get_post_meta($product_id, '_axon_frame_template', true) ?: [
+        'image_id' => 0,
+        'coordinates' => [],
+        'frame_image_url' => ''
+    ];
+    $frame_template_settings['coordinates'] = $coordinates;
+    update_post_meta($product_id, '_axon_frame_template', $frame_template_settings);
+
+    wp_send_json_success(['message' => 'Coordinates updated successfully']);
+}
+add_action('wp_ajax_update_frame_template_coordinates', 'update_frame_template_coordinates');
+
+
+function enqueue_package_gallery_script() {
+    static $enqueued = false;
+    if ($enqueued || !is_product()) {
+        return;
+    }
+
+    $product = wc_get_product(get_the_ID());
+    $is_package_product = $product && $product->get_type() === 'package';
+
+    if ($is_package_product) {
+        $package_products = get_post_meta(get_the_ID(), '_package_products', true) ?: [];
+        $sub_product_settings = [];
+
+        foreach ($package_products as $product_data) {
+            $product_id = $product_data['product'];
+            $gallery_option = get_post_meta($product_id, '_gallery_option', true) ?: 'single_image';
+            $frame_template_raw = get_post_meta($product_id, '_axon_frame_template', true);
+            error_log("Raw frame template for product ID $product_id: " . print_r($frame_template_raw, true));
+
+            $frame_template = [];
+            if (empty($frame_template_raw) || !is_array($frame_template_raw)) {
+                $frame_template = [
+                    'image_id' => 0,
+                    'coordinates' => $gallery_option === 'multiple_images' ? [] : ['x1' => 0, 'y1' => 0, 'x2' => 0, 'y2' => 0, 'aspect_ratio' => 1],
+                    'frame_image_url' => '',
+                    'gallery_option' => $gallery_option
+                ];
+                error_log("Frame template not set or invalid for product ID $product_id. Using default empty template.");
+            } else {
+                $frame_template = $frame_template_raw;
+                $frame_template['gallery_option'] = $gallery_option;
+
+                if ($gallery_option === 'single_image') {
+                    if (!isset($frame_template['coordinates']) || !is_array($frame_template['coordinates']) || empty($frame_template['coordinates'])) {
+                        $frame_template['coordinates'] = ['x1' => 0, 'y1' => 0, 'x2' => 0, 'y2' => 0, 'aspect_ratio' => 1];
+                        error_log("Single image product ID $product_id has invalid coordinates. Set to default.");
+                    }
+                } elseif ($gallery_option === 'multiple_images') {
+                    if (!isset($frame_template['coordinates']) || !is_array($frame_template['coordinates'])) {
+                        $frame_template['coordinates'] = [];
+                        error_log("Multiple image product ID $product_id has invalid coordinates. Set to empty array.");
+                    }
+                }
+            }
+
+            if (!empty($frame_template['image_id'])) {
+                $frame_image_url = wp_get_attachment_url($frame_template['image_id']) ?: '';
+                $frame_image_path = get_attached_file($frame_template['image_id']);
+                $frame_image_info = false;
+
+                if ($frame_image_path && file_exists($frame_image_path)) {
+                    $frame_image_info = getimagesize($frame_image_path);
+                } else {
+                    error_log("Frame image not found for product ID $product_id, image ID {$frame_template['image_id']}. Path: " . ($frame_image_path ?: 'none'));
+                }
+
+                if ($frame_image_info) {
+                    $frame_width = $frame_image_info[0];
+                    $frame_height = $frame_image_info[1];
+                    $admin_preview_width = 1200;
+                    $scale_factor = $frame_width > 0 ? $admin_preview_width / $frame_width : 1;
+                    $default_aspect_ratio = $frame_height > 0 ? $frame_width / $frame_height : 1;
+
+                    if ($gallery_option === 'single_image') {
+                        $coords = (is_array($frame_template['coordinates']) && !empty($frame_template['coordinates'])) 
+                            ? $frame_template['coordinates'][0] 
+                            : [];
+                        $coords = wp_parse_args($coords, [
+                            'x1' => 0,
+                            'y1' => 0,
+                            'x2' => 0,
+                            'y2' => 0,
+                            'aspect_ratio' => $default_aspect_ratio
+                        ]);
+
+                        $aspect_ratio = floatval($coords['aspect_ratio'] ?: $default_aspect_ratio);
+                        $width = floatval($coords['x2']) - floatval($coords['x1']);
+                        $height = floatval($coords['y2']) - floatval($coords['y1']);
+                        $is_all_zeros = $coords['x1'] == 0 && $coords['x2'] == 0 && $coords['y1'] == 0 && $coords['y2'] == 0;
+
+                        if ($is_all_zeros || $width <= 0 || $height <= 0) {
+                            $expected_width = 249.64824120603015; // Default from JS log
+                            $expected_height = 360; // Default from JS log
+                            $width = $expected_width;
+                            $height = $expected_height;
+
+                            $x1 = ($frame_width - $width) / 2;
+                            $y1 = ($frame_height - $height) / 2;
+                            $x2 = $x1 + $width;
+                            $y2 = $y1 + $height;
+
+                            error_log("Invalid coordinates for product ID $product_id. Centering image with expected dimensions: x1=$x1, y1=$y1, x2=$x2, y2=$y2");
+                        } else {
+                            $x1 = floatval($coords['x1']);
+                            $y1 = floatval($coords['y1']);
+                            $x2 = floatval($coords['x2']);
+                            $y2 = floatval($coords['y2']);
+                            error_log("Using raw coordinates for product ID $product_id: x1=$x1, y1=$y1, x2=$x2, y2=$y2");
+                        }
+
+                        $frame_template['coordinates'] = [
+                            'x1' => $x1,
+                            'y1' => $y1,
+                            'x2' => $x2,
+                            'y2' => $y2,
+                            'aspect_ratio' => $aspect_ratio,
+                            'frame_original_width' => $frame_width,
+                            'frame_original_height' => $frame_height,
+                            'admin_preview_width' => $admin_preview_width
+                        ];
+                    } elseif ($gallery_option === 'multiple_images') {
+                        $frame_template['coordinates'] = array_map(function ($coords) use ($scale_factor, $default_aspect_ratio, $frame_width, $frame_height, $admin_preview_width) {
+                            $coords = wp_parse_args($coords, [
+                                'x1' => 0,
+                                'y1' => 0,
+                                'x2' => 0,
+                                'y2' => 0,
+                                'aspect_ratio' => $default_aspect_ratio
+                            ]);
+                            return [
+                                'x1' => floatval($coords['x1']) * $scale_factor,
+                                'y1' => floatval($coords['y1']) * $scale_factor,
+                                'x2' => floatval($coords['x2']) * $scale_factor,
+                                'y2' => floatval($coords['y2']) * $scale_factor,
+                                'aspect_ratio' => floatval($coords['aspect_ratio'] ?: $default_aspect_ratio),
+                                'frame_original_width' => $frame_width,
+                                'frame_original_height' => $frame_height,
+                                'admin_preview_width' => $admin_preview_width
+                            ];
+                        }, $frame_template['coordinates'] ?: []);
+                    }
+
+                    $frame_template['frame_width'] = $frame_width;
+                    $frame_template['frame_height'] = $frame_height;
+                } else {
+                    $default_aspect_ratio = 1;
+                    if ($gallery_option === 'single_image') {
+                        $coords = wp_parse_args($frame_template['coordinates'], [
+                            'x1' => 0,
+                            'y1' => 0,
+                            'x2' => 0,
+                            'y2' => 0,
+                            'aspect_ratio' => $default_aspect_ratio
+                        ]);
+                        $frame_template['coordinates'] = [
+                            'x1' => floatval($coords['x1']),
+                            'y1' => floatval($coords['y1']),
+                            'x2' => floatval($coords['x2']),
+                            'y2' => floatval($coords['y2']),
+                            'aspect_ratio' => floatval($coords['aspect_ratio'] ?: $default_aspect_ratio),
+                            'frame_original_width' => 0,
+                            'frame_original_height' => 0,
+                            'admin_preview_width' => $admin_preview_width
+                        ];
+                    } elseif ($gallery_option === 'multiple_images') {
+                        $frame_template['coordinates'] = array_map(function ($coords) use ($default_aspect_ratio) {
+                            $coords = wp_parse_args($coords, [
+                                'x1' => 0,
+                                'y1' => 0,
+                                'x2' => 0,
+                                'y2' => 0,
+                                'aspect_ratio' => $default_aspect_ratio
+                            ]);
+                            return [
+                                'x1' => floatval($coords['x1']),
+                                'y1' => floatval($coords['y1']),
+                                'x2' => floatval($coords['x2']),
+                                'y2' => floatval($coords['y2']),
+                                'aspect_ratio' => floatval($coords['aspect_ratio'] ?: $default_aspect_ratio),
+                                'frame_original_width' => 0,
+                                'frame_original_height' => 0,
+                                'admin_preview_width' => $admin_preview_width
+                            ];
+                        }, $frame_template['coordinates'] ?: []);
+                    }
+                }
+
+                $frame_template['frame_image_url'] = $frame_image_url;
+            } else {
+                error_log("No frame image ID set for product ID $product_id. Frame image URL will be empty.");
+                if ($gallery_option === 'single_image') {
+                    $coords = wp_parse_args($frame_template['coordinates'], [
+                        'x1' => 0,
+                        'y1' => 0,
+                        'x2' => 0,
+                        'y2' => 0,
+                        'aspect_ratio' => 1
+                    ]);
+                    $frame_template['coordinates'] = [
+                        'x1' => floatval($coords['x1']),
+                        'y1' => floatval($coords['y1']),
+                        'x2' => floatval($coords['x2']),
+                        'y2' => floatval($coords['y2']),
+                        'aspect_ratio' => floatval($coords['aspect_ratio'] > 0 ? $coords['aspect_ratio'] : 1),
+                        'frame_original_width' => 0,
+                        'frame_original_height' => 0,
+                        'admin_preview_width' => $admin_preview_width
+                    ];
+                } elseif ($gallery_option === 'multiple_images') {
+                    $frame_template['coordinates'] = array_map(function ($coords) {
+                        $coords = wp_parse_args($coords, [
+                            'x1' => 0,
+                            'y1' => 0,
+                            'x2' => 0,
+                            'y2' => 0,
+                            'aspect_ratio' => 1
+                        ]);
+                        return [
+                            'x1' => floatval($coords['x1']),
+                            'y1' => floatval($coords['y1']),
+                            'x2' => floatval($coords['x2']),
+                            'y2' => floatval($coords['y2']),
+                            'aspect_ratio' => floatval($coords['aspect_ratio'] ?? 1),
+                            'frame_original_width' => 0,
+                            'frame_original_height' => 0,
+                            'admin_preview_width' => $admin_preview_width
+                        ];
+                    }, $frame_template['coordinates'] ?: []);
+                }
+                $frame_template['frame_image_url'] = '';
+            }
+
+            $sub_product_settings[$product_id] = $frame_template;
+            error_log("Final Product ID: $product_id, Gallery Option: $gallery_option, Frame Template: " . print_r($frame_template, true));
+        }
+
+        wp_enqueue_script(
+            'axon-package-gallery-script',
+            plugin_dir_url(__FILE__) . 'assets/js/package-gallery-script.js',
+            array('jquery'),
+            '1.0.0.9',
+            true
+        );
+
+        wp_localize_script(
+            'axon-package-gallery-script',
+            'packageAjax',
+            array(
+                'ajaxurl' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('axon_photo_gallery_nonce'),
+                'sub_product_settings' => $sub_product_settings
+            )
+        );
+
+        wp_enqueue_style(
+            'axon-package-gallery-style',
+            plugin_dir_url(__FILE__) . 'assets/css/package-dummy.css',
+            array(),
+            '1.0.0'
+        );
+
+        $css = '
+            #preview-modal {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 10000;
+                justify-content: center;
+                align-items: center;
+            }
+            #preview-modal-content {
+                background: white;
+                padding: 20px;
+                border-radius: 5px;
+                position: relative;
+                max-width: 90%;
+                max-height: 90%;
+                overflow: auto;
+                text-align: center;
+                margin-top: 30px;
+            }
+            #preview-modal-close {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                cursor: pointer;
+                font-size: 24px;
+            }
+            #preview-image {
+                max-width: 100%;
+                max-height: 80vh;
+                height: auto;
+            }
+        ';
+
+        foreach ($sub_product_settings as $product_id => $settings) {
+            $coordinates = $settings['coordinates'];
+            $has_frame_image = !empty($settings['frame_image_url']);
+            $has_valid_coordinates = $settings['gallery_option'] === 'single_image'
+                ? (is_array($coordinates) && (
+                    (isset($coordinates['x1']) ? $coordinates['x1'] : 0) != 0 ||
+                    (isset($coordinates['y1']) ? $coordinates['y1'] : 0) != 0 ||
+                    (isset($coordinates['x2']) ? $coordinates['x2'] : 0) != 0 ||
+                    (isset($coordinates['y2']) ? $coordinates['y2'] : 0) != 0
+                ))
+                : (is_array($coordinates) && count($coordinates) > 0 && array_reduce($coordinates, function ($carry, $coord) {
+                    return $carry || ($coord['x1'] != $coord['x2'] && $coord['y1'] != $coord['y2']) && ($coord['x1'] < $coord['x2'] && $coord['y1'] < $coord['y2']);
+                }, false));
+            $has_valid_aspect_ratio = $settings['gallery_option'] === 'single_image'
+                ? (is_array($coordinates) && floatval(isset($coordinates['aspect_ratio']) ? $coordinates['aspect_ratio'] : 0) > 0)
+                : (is_array($coordinates) && array_reduce($coordinates, function ($carry, $coord) {
+                    return $carry && floatval($coord['aspect_ratio']) > 0;
+                }, true));
+            if ($has_frame_image && $has_valid_coordinates && $has_valid_aspect_ratio) {
+                $css .= '
+                    div.tui-image-editor-container[data-product-id="' . $product_id . '"] ul.tui-image-editor-submenu-item li.tui-image-editor-button.preset,
+                    div.tui-image-editor-container[data-product-id="' . $product_id . '"] ul.tui-image-editor-submenu-item li.tie-crop-preset-button {
+                        display: none !important;
+                    }
+                ';
+            }
+        }
+
+        wp_add_inline_style('axon-package-gallery-style', $css);
+        $enqueued = true;
+    }
+}
+add_action('wp_enqueue_scripts', 'enqueue_package_gallery_script');
